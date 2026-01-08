@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
+import path from "path";
 import { authRoutes } from "./routes/authRoutes";
 import { listingRoutes } from "./routes/listingRoutes";
 import { orderRoutes } from "./routes/orderRoutes";
@@ -15,6 +16,9 @@ app.use(cors());
 app.use(express.json() as any);
 
 // --- SWAGGER CONFIGURATION ---
+// Fix for Windows: Normalize path separators to forward slashes for glob patterns
+const routesPath = path.join(__dirname, "routes", "*.ts").replace(/\\/g, "/");
+
 const swaggerOptions = {
   definition: {
     openapi: "3.0.0",
@@ -31,6 +35,14 @@ const swaggerOptions = {
       {
         url: `http://localhost:${PORT}`,
         description: "Local Development Server",
+      },
+    ],
+    tags: [
+      { name: "Auth", description: "User authentication and registration" },
+      { name: "Listings", description: "Bike management APIs" },
+      {
+        name: "Orders",
+        description: "Order processing and State Machine transitions",
       },
     ],
     components: {
@@ -60,14 +72,17 @@ const swaggerOptions = {
             id: { type: "string" },
             title: { type: "string" },
             price: { type: "number" },
-            type: { type: "string", enum: ["ROAD", "MTB", "GRAVEL"] },
+            type: {
+              type: "string",
+              enum: ["ROAD", "MTB", "GRAVEL", "TRIATHLON"],
+            },
           },
         },
       },
     },
   },
-  // Paths to files containing OpenAPI definitions
-  apis: ["./server/routes/*.ts"],
+  // Use the normalized absolute path
+  apis: [routesPath],
 };
 
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
