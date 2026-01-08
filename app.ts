@@ -1,14 +1,11 @@
-import express from 'express';
-import mongoose from 'mongoose';
-import cors from 'cors';
-import { authRoutes } from './routes/authRoutes';
-import { listingRoutes } from './routes/listingRoutes';
-import { orderRoutes } from './routes/orderRoutes';
-
-// Fix for missing Node.js type definitions in this environment
-declare var require: any;
-declare var module: any;
-declare var process: any;
+import express from "express";
+import mongoose from "mongoose";
+import cors from "cors";
+import swaggerUi from "swagger-ui-express";
+import swaggerJsdoc from "swagger-jsdoc";
+import { authRoutes } from "./routes/authRoutes";
+import { listingRoutes } from "./routes/listingRoutes";
+import { orderRoutes } from "./routes/orderRoutes";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -17,32 +14,99 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json() as any);
 
+// --- SWAGGER CONFIGURATION ---
+const swaggerOptions = {
+  definition: {
+    openapi: "3.0.0",
+    info: {
+      title: "VeloBike API Documentation",
+      version: "1.0.0",
+      description: "API documentation for VeloBike C2C Marketplace",
+      contact: {
+        name: "VeloBike Support",
+        email: "support@velobike.com",
+      },
+    },
+    servers: [
+      {
+        url: `http://localhost:${PORT}`,
+        description: "Local Development Server",
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+      schemas: {
+        User: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            email: { type: "string" },
+            fullName: { type: "string" },
+            role: {
+              type: "string",
+              enum: ["GUEST", "BUYER", "SELLER", "INSPECTOR", "ADMIN"],
+            },
+          },
+        },
+        Listing: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            title: { type: "string" },
+            price: { type: "number" },
+            type: { type: "string", enum: ["ROAD", "MTB", "GRAVEL"] },
+          },
+        },
+      },
+    },
+  },
+  // Paths to files containing OpenAPI definitions
+  apis: ["./server/routes/*.ts"],
+};
+
+const swaggerDocs = swaggerJsdoc(swaggerOptions);
+app.use("/api-docs", swaggerUi.serve as any, swaggerUi.setup(swaggerDocs));
+
 // Database Connection
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/velobike';
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ MongoDB Connected'))
-  .catch(err => console.error('❌ MongoDB Connection Error:', err));
+const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/velobike";
+mongoose
+  .connect(MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
 // --- ROUTES ---
-app.use('/api/auth', authRoutes);
-app.use('/api/listings', listingRoutes);
-app.use('/api/orders', orderRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/listings", listingRoutes);
+app.use("/api/orders", orderRoutes);
 
 // Base Route
-app.get('/', (req, res) => {
-  res.send('VeloBike Backend API is Running 🚀');
+app.get("/", (req, res) => {
+  res.send(`
+    <h1>VeloBike Backend API 🚀</h1>
+    <p>Server is running.</p>
+    <a href="/api-docs">👉 Click here to view Swagger API Documentation</a>
+  `);
 });
 
 // Error Handling Middleware
 app.use((err: any, req: any, res: any, next: any) => {
   console.error(err.stack);
-  res.status(500).json({ success: false, message: 'Server Error', error: err.message });
+  res
+    .status(500)
+    .json({ success: false, message: "Server Error", error: err.message });
 });
 
 // Only start if not imported (for testing)
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    console.log(`Swagger Docs available at http://localhost:${PORT}/api-docs`);
   });
 }
 
