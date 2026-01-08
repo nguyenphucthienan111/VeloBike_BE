@@ -18,10 +18,24 @@ export interface IUser extends MongooseDocument {
   email: string;
   passwordHash?: string; // Optional because Google users might not have a password initially
   googleId?: string; // Google OAuth ID
+  facebookId?: string; // Facebook OAuth ID
   fullName: string;
   avatar?: string; // User profile picture
+  phone?: string;
+  address?: {
+    street?: string;
+    district?: string;
+    city?: string;
+    province?: string;
+    zipCode?: string;
+  };
   role: UserRole;
   kycStatus: KycStatus;
+  kycData?: {
+    documentId?: string;
+    documentType?: string;
+    verifiedAt?: Date;
+  };
   wallet: {
     balance: number;
     currency: string;
@@ -30,6 +44,13 @@ export interface IUser extends MongooseDocument {
     score: number;
     reviewCount: number;
   };
+  fcmToken?: string;
+  bankAccount?: {
+    accountName?: string;
+    accountNumber?: string;
+    bankName?: string;
+  };
+  isActive?: boolean;
   createdAt: Date;
 }
 

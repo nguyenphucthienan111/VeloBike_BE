@@ -76,6 +76,23 @@ export class OrderService {
     return order;
   }
 
+  // Instance method compatibility for existing code using new OrderService().transitionState(...)
+  async transitionState(
+    orderId: string,
+    newStatus: OrderStatus,
+    actorId: string,
+    actorRole?: string,
+    note?: string
+  ): Promise<IOrder> {
+    return OrderService.transitionStatus(
+      orderId,
+      newStatus,
+      actorId,
+      actorRole,
+      note
+    );
+  }
+
   /**
    * Create new order from listing
    */

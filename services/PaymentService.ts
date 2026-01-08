@@ -152,9 +152,9 @@ export class PaymentService {
 
         if (order) {
           // Update order status to ESCROW_LOCKED
-          order.status = "ESCROW_LOCKED";
+          order.status = OrderStatus.ESCROW_LOCKED;
           order.timeline.push({
-            status: "ESCROW_LOCKED",
+            status: OrderStatus.ESCROW_LOCKED,
             timestamp: new Date(),
             actorId: order.buyerId,
             note: `Payment confirmed via PayOS (Order Code: ${orderCode})`,
