@@ -45,7 +45,7 @@ authRoutes.post("/register", AuthController.register as any);
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Log in a user
+ *     summary: Log in a user with Email/Password
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -81,3 +81,38 @@ authRoutes.post("/register", AuthController.register as any);
  *         description: Invalid credentials
  */
 authRoutes.post("/login", AuthController.login as any);
+
+/**
+ * @swagger
+ * /api/auth/google:
+ *   post:
+ *     summary: Log in or Register using Google OAuth Token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - googleToken
+ *             properties:
+ *               googleToken:
+ *                 type: string
+ *                 description: ID Token received from Google Client SDK
+ *     responses:
+ *       200:
+ *         description: Login/Register successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 token:
+ *                   type: string
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ */
+authRoutes.post("/google", AuthController.googleLogin as any);

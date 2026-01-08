@@ -4,6 +4,7 @@ import { User, UserRole } from "../models/User";
 // In production, use bcryptjs for hashing and jsonwebtoken for tokens
 // import bcrypt from 'bcryptjs';
 // import jwt from 'jsonwebtoken';
+// import { OAuth2Client } from 'google-auth-library'; // Install this for real implementation
 
 export class AuthController {
   // POST /api/auth/register
@@ -61,6 +62,14 @@ export class AuthController {
 
       // 2. Check Password (Simulation)
       // const isMatch = await bcrypt.compare(password, user.passwordHash);
+      // NOTE: Users created via Google might not have a passwordHash
+      if (!user.passwordHash) {
+        res
+          .status(400)
+          .json({ success: false, message: "Please login with Google" });
+        return;
+      }
+
       const isMatch = user.passwordHash === `hashed_${password}`; // Mock check
 
       if (!isMatch) {
@@ -81,6 +90,79 @@ export class AuthController {
           email: user.email,
           fullName: user.fullName,
           role: user.role,
+          avatar: user.avatar,
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // POST /api/auth/google
+  static async googleLogin(req: any, res: any): Promise<void> {
+    try {
+      const { googleToken } = req.body;
+
+      // --- REAL WORLD IMPLEMENTATION ---
+      // const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+      // const ticket = await client.verifyIdToken({
+      //   idToken: googleToken,
+      //   audience: process.env.GOOGLE_CLIENT_ID,
+      // });
+      // const payload = ticket.getPayload();
+      // ---------------------------------
+
+      // --- SIMULATION FOR DEMO ---
+      // Assuming the frontend sends a mock token or valid structure
+      const payload = {
+        email: "demo.google@example.com",
+        name: "Google User Demo",
+        sub: "google_id_12345", // Google ID
+        picture: "https://lh3.googleusercontent.com/a-/AOh14Gj...",
+      };
+
+      if (!payload || !payload.email) {
+        res
+          .status(400)
+          .json({ success: false, message: "Invalid Google Token" });
+        return;
+      }
+
+      // 1. Check if user exists
+      let user = await User.findOne({ email: payload.email });
+
+      if (user) {
+        // If user exists but no googleId, link it
+        if (!user.googleId) {
+          user.googleId = payload.sub;
+          user.avatar = user.avatar || payload.picture;
+          await user.save();
+        }
+      } else {
+        // Create new user from Google info
+        user = new User({
+          email: payload.email,
+          fullName: payload.name,
+          googleId: payload.sub,
+          avatar: payload.picture,
+          role: UserRole.BUYER, // Default role
+          kycStatus: "PENDING",
+        });
+        await user.save();
+      }
+
+      // 2. Generate Token
+      const token = `mock_jwt_token_${user._id}`;
+
+      res.json({
+        success: true,
+        token,
+        user: {
+          id: user._id,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role,
+          avatar: user.avatar,
         },
       });
     } catch (error: any) {

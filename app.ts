@@ -7,6 +7,8 @@ import path from "path";
 import { authRoutes } from "./routes/authRoutes";
 import { listingRoutes } from "./routes/listingRoutes";
 import { orderRoutes } from "./routes/orderRoutes";
+import { inspectionRoutes } from "./routes/inspectionRoutes";
+import { paymentRoutes } from "./routes/paymentRoutes";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -44,6 +46,8 @@ const swaggerOptions = {
         name: "Orders",
         description: "Order processing and State Machine transitions",
       },
+      { name: "Inspections", description: "Technical checks for bikes" },
+      { name: "Payment", description: "Escrow payment and Webhooks" },
     ],
     components: {
       securitySchemes: {
@@ -99,6 +103,8 @@ mongoose
 app.use("/api/auth", authRoutes);
 app.use("/api/listings", listingRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/inspections", inspectionRoutes);
+app.use("/api/payment", paymentRoutes);
 
 // Base Route
 app.get("/", (req, res) => {
