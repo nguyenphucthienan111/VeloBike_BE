@@ -4,21 +4,72 @@ import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import path from "path";
+import fs from "fs"; // Import File System
+import { createServer } from "http";
+import { Server } from "socket.io";
+
+// Import Routes
 import { authRoutes } from "./routes/authRoutes";
 import { listingRoutes } from "./routes/listingRoutes";
 import { orderRoutes } from "./routes/orderRoutes";
 import { inspectionRoutes } from "./routes/inspectionRoutes";
 import { paymentRoutes } from "./routes/paymentRoutes";
+import { uploadRoutes } from "./routes/uploadRoutes";
+import { reviewRoutes } from "./routes/reviewRoutes";
+import { messageRoutes } from "./routes/messageRoutes";
+import { wishlistRoutes } from "./routes/wishlistRoutes";
+import { disputeRoutes } from "./routes/disputeRoutes";
+import { adminRoutes } from "./routes/adminRoutes";
 
+// Fix for missing Node.js type definitions
+declare var __dirname: string;
+declare var require: any;
+declare var module: any;
+
+// Initialize App & Socket.io
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
+
 const PORT = process.env.PORT || 5000;
+
+// Ensure uploads directory exists (Task B4 Fix)
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+  console.log("Created uploads directory");
+}
 
 // Middleware
 app.use(cors());
 app.use(express.json() as any);
+// Serve uploaded files statically so frontend can view them
+app.use("/uploads", express.static(path.join(__dirname, "uploads")) as any);
+
+// --- SOCKET.IO LOGIC ---
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
+
+  socket.on("join_room", (orderId) => {
+    socket.join(orderId);
+    console.log(`User with ID: ${socket.id} joined room: ${orderId}`);
+  });
+
+  socket.on("send_message", (data) => {
+    socket.to(data.orderId).emit("receive_message", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User Disconnected", socket.id);
+  });
+});
 
 // --- SWAGGER CONFIGURATION ---
-// Fix for Windows: Normalize path separators to forward slashes for glob patterns
 const routesPath = path.join(__dirname, "routes", "*.ts").replace(/\\/g, "/");
 
 const swaggerOptions = {
@@ -28,26 +79,12 @@ const swaggerOptions = {
       title: "VeloBike API Documentation",
       version: "1.0.0",
       description: "API documentation for VeloBike C2C Marketplace",
-      contact: {
-        name: "VeloBike Support",
-        email: "support@velobike.com",
-      },
     },
     servers: [
       {
         url: `http://localhost:${PORT}`,
         description: "Local Development Server",
       },
-    ],
-    tags: [
-      { name: "Auth", description: "User authentication and registration" },
-      { name: "Listings", description: "Bike management APIs" },
-      {
-        name: "Orders",
-        description: "Order processing and State Machine transitions",
-      },
-      { name: "Inspections", description: "Technical checks for bikes" },
-      { name: "Payment", description: "Escrow payment and Webhooks" },
     ],
     components: {
       securitySchemes: {
@@ -57,35 +94,8 @@ const swaggerOptions = {
           bearerFormat: "JWT",
         },
       },
-      schemas: {
-        User: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            email: { type: "string" },
-            fullName: { type: "string" },
-            role: {
-              type: "string",
-              enum: ["GUEST", "BUYER", "SELLER", "INSPECTOR", "ADMIN"],
-            },
-          },
-        },
-        Listing: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            title: { type: "string" },
-            price: { type: "number" },
-            type: {
-              type: "string",
-              enum: ["ROAD", "MTB", "GRAVEL", "TRIATHLON"],
-            },
-          },
-        },
-      },
     },
   },
-  // Use the normalized absolute path
   apis: [routesPath],
 };
 
@@ -99,21 +109,18 @@ mongoose
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err: any) => console.error("❌ MongoDB Connection Error:", err));
 
-// --- ROUTES ---
+// --- ROUTES REGISTRATION ---
 app.use("/api/auth", authRoutes);
 app.use("/api/listings", listingRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/inspections", inspectionRoutes);
 app.use("/api/payment", paymentRoutes);
-
-// Base Route
-app.get("/", (req, res) => {
-  res.send(`
-    <h1>VeloBike Backend API 🚀</h1>
-    <p>Server is running.</p>
-    <a href="/api-docs">👉 Click here to view Swagger API Documentation</a>
-  `);
-});
+app.use("/api/upload", uploadRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/wishlist", wishlistRoutes);
+app.use("/api/disputes", disputeRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Error Handling Middleware
 app.use((err: any, req: any, res: any, next: any) => {
@@ -123,11 +130,12 @@ app.use((err: any, req: any, res: any, next: any) => {
     .json({ success: false, message: "Server Error", error: err.message });
 });
 
-// Only start if not imported (for testing)
+// Start SERVER
 if (require.main === module) {
-  app.listen(PORT, () => {
+  httpServer.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Swagger Docs available at http://localhost:${PORT}/api-docs`);
+    console.log(`Socket.io is ready`);
   });
 }
 

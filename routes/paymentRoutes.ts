@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { PaymentController } from "../controllers/PaymentController";
+import { protect, authorize } from "../middleware/authMiddleware";
+import { UserRole } from "../models/User";
 
 export const paymentRoutes = Router();
 
@@ -7,8 +9,10 @@ export const paymentRoutes = Router();
  * @swagger
  * /api/payment/create-link:
  *   post:
- *     summary: Create a payment link for an order (Buyer)
+ *     summary: Create a payment link for an order (Buyer only)
  *     tags: [Payment]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -22,7 +26,12 @@ export const paymentRoutes = Router();
  *       200:
  *         description: Payment link generated
  */
-paymentRoutes.post("/create-link", PaymentController.createPaymentLink as any);
+paymentRoutes.post(
+  "/create-link",
+  protect,
+  authorize(UserRole.BUYER), // ONLY BUYER CAN PAY
+  PaymentController.createPaymentLink as any
+);
 
 /**
  * @swagger

@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document as MongooseDocument } from "mongoose";
 
 export enum UserRole {
   GUEST = "GUEST",
@@ -14,7 +14,7 @@ export enum KycStatus {
   REJECTED = "REJECTED",
 }
 
-export interface IUser extends Document {
+export interface IUser extends MongooseDocument {
   email: string;
   passwordHash?: string; // Optional because Google users might not have a password initially
   googleId?: string; // Google OAuth ID
@@ -33,13 +33,22 @@ export interface IUser extends Document {
   createdAt: Date;
 }
 
-const UserSchema: Schema = new Schema(
+const UserSchema = new Schema<IUser>(
   {
     email: { type: String, required: true, unique: true, index: true },
-    passwordHash: { type: String }, // Not required if googleId exists
+    passwordHash: { type: String },
     googleId: { type: String, unique: true, sparse: true },
+    facebookId: { type: String, unique: true, sparse: true },
     fullName: { type: String, required: true },
     avatar: { type: String },
+    phone: { type: String },
+    address: {
+      street: String,
+      district: String,
+      city: String,
+      province: String,
+      zipCode: String,
+    },
     role: {
       type: String,
       enum: Object.values(UserRole),
@@ -50,6 +59,11 @@ const UserSchema: Schema = new Schema(
       enum: Object.values(KycStatus),
       default: KycStatus.PENDING,
     },
+    kycData: {
+      documentId: String,
+      documentType: String,
+      verifiedAt: Date,
+    },
     wallet: {
       balance: { type: Number, default: 0 },
       currency: { type: String, default: "VND" },
@@ -58,6 +72,13 @@ const UserSchema: Schema = new Schema(
       score: { type: Number, default: 5.0 },
       reviewCount: { type: Number, default: 0 },
     },
+    fcmToken: String,
+    bankAccount: {
+      accountName: String,
+      accountNumber: String,
+      bankName: String,
+    },
+    isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

@@ -3,6 +3,7 @@ import { Inspection } from "../models/Inspection";
 import { Order, OrderStatus } from "../models/Order";
 import { OrderService } from "../services/OrderService";
 import { UserRole } from "../models/User";
+import { AuthRequest } from "../middleware/authMiddleware";
 
 export class InspectionController {
   // POST /api/inspections
@@ -11,12 +12,20 @@ export class InspectionController {
     try {
       const {
         orderId,
-        inspectorId,
         checkpoints,
         overallVerdict,
         overallScore,
         inspectorNote,
       } = req.body;
+
+      // SECURITY FIX: Get Inspector ID from Token
+      const inspectorId = req.user?.id;
+
+      if (!inspectorId) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
+      }
 
       // 1. Verify Order exists and is in correct state
       const order = await Order.findById(orderId);
@@ -47,7 +56,6 @@ export class InspectionController {
       await newInspection.save();
 
       // 3. Trigger Order State Machine
-      // Automatically transition order based on verdict
       const orderService = new OrderService();
       let nextStatus = OrderStatus.IN_INSPECTION; // fallback
 

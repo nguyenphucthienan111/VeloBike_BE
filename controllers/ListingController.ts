@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import { Listing, BikeType } from "../models/Listing";
+import { Listing } from "../models/Listing";
+import { AuthRequest } from "../middleware/authMiddleware";
 
 export class ListingController {
   // GET /api/listings
@@ -49,11 +50,21 @@ export class ListingController {
   // POST /api/listings
   static async create(req: any, res: any) {
     try {
-      // In a real app, verify user from Token Middleware
-      // const userId = req.user.id;
-      // For now, we expect sellerId in body for testing
+      // SECURITY FIX: Get User ID from Token
+      const sellerId = req.user?.id;
 
-      const newListing = new Listing(req.body);
+      if (!sellerId) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
+      }
+
+      const newListing = new Listing({
+        ...req.body,
+        sellerId: sellerId, // Force override sellerId from token
+        status: "DRAFT", // Default to Draft until approved/published
+      });
+
       await newListing.save();
 
       res.status(201).json({ success: true, data: newListing });

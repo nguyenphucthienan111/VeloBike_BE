@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { OrderService } from "../services/OrderService";
 import { UserRole } from "../models/User";
 import { OrderStatus } from "../models/Order";
+import { protect, AuthRequest } from "../middleware/authMiddleware";
 
 export const orderRoutes = Router();
 
@@ -35,51 +36,37 @@ export const orderRoutes = Router();
  *             type: object
  *             required:
  *               - newState
- *               - userId
- *               - role
  *             properties:
  *               newState:
  *                 type: string
  *                 enum: [ESCROW_LOCKED, IN_INSPECTION, INSPECTION_PASSED, INSPECTION_FAILED, SHIPPING, DELIVERED, COMPLETED]
  *                 description: The target status to transition to
- *               userId:
- *                 type: string
- *                 description: ID of the user performing the action (simulated auth)
- *               role:
- *                 type: string
- *                 enum: [BUYER, SELLER, INSPECTOR, ADMIN]
- *                 description: Role of the user (simulated auth)
  *               note:
  *                 type: string
  *                 description: Optional note for the audit log
  *     responses:
  *       200:
  *         description: State transition successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 order:
- *                   type: object
- *       400:
- *         description: Invalid transition rule or missing parameters
+ *       403:
+ *         description: Unauthorized role
  */
 const transitionHandler = async (req: any, res: any) => {
   try {
     const { id } = req.params;
-    const { newState, note, userId, role } = req.body;
+    const { newState, note } = req.body;
 
-    // NOTE: In production, 'userId' and 'role' should come from Auth Middleware (req.user), not req.body!
+    // SECURITY FIX: User ID and Role must come from the authenticated token
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
 
     const orderService = new OrderService();
     const updatedOrder = await orderService.transitionState(
       id,
       newState as OrderStatus,
-      userId, // Actor ID
-      role as UserRole, // Actor Role
+      user.id, // Actor ID from Token
+      user.role, // Actor Role from Token
       note
     );
 
@@ -89,4 +76,4 @@ const transitionHandler = async (req: any, res: any) => {
   }
 };
 
-orderRoutes.post("/:id/transition", transitionHandler as any);
+orderRoutes.post("/:id/transition", protect, transitionHandler as any);
