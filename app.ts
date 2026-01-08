@@ -78,7 +78,7 @@ const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/velobike";
 mongoose
   .connect(MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.error("❌ MongoDB Connection Error:", err));
+  .catch((err: any) => console.error("❌ MongoDB Connection Error:", err));
 
 // --- ROUTES ---
 app.use("/api/auth", authRoutes);
