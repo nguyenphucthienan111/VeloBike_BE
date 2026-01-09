@@ -86,6 +86,11 @@ const UserSchema = new Schema<IUser>(
       documentType: String,
       verifiedAt: Date,
     },
+    bodyMeasurements: {
+      height: Number, // cm
+      inseam: Number, // cm
+      weight: Number, // kg
+    },
     wallet: {
       balance: { type: Number, default: 0 },
       currency: { type: String, default: "VND" },

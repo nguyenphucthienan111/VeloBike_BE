@@ -26,6 +26,7 @@ import { disputeRoutes } from "./routes/disputeRoutes";
 import { adminRoutes } from "./routes/adminRoutes";
 import { chatbotRoutes } from "./routes/chatbotRoutes";
 import { logisticsRoutes } from "./routes/logisticsRoutes";
+import { notificationRoutes } from "./routes/notificationRoutes";
 import userRoutes from "./routes/userRoutes";
 
 // Fix for missing Node.js type definitions
@@ -137,6 +138,7 @@ app.use("/api/disputes", disputeRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/chatbot", chatbotRoutes);
 app.use("/api/logistics", logisticsRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.use("/api/users", userRoutes);
 
 // Error Handling Middleware

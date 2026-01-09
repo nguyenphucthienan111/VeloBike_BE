@@ -59,26 +59,6 @@ inspectionRoutes.post(
 
 /**
  * @swagger
- * /api/inspections/{orderId}:
- *   get:
- *     summary: Get inspection report for an order
- *     tags: [Inspections]
- *     parameters:
- *       - in: path
- *         name: orderId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Inspection details
- *       404:
- *         description: Not found
- */
-inspectionRoutes.get("/:orderId", InspectionController.getByOrder as any);
-
-/**
- * @swagger
  * /api/inspections/checklist/{bikeType}:
  *   get:
  *     summary: Get dynamic inspection checklist based on bike type
@@ -122,6 +102,9 @@ inspectionRoutes.get("/checklist/order/:orderId", InspectionController.getCheckl
  *     tags: [Inspections]
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of pending inspections
  */
 inspectionRoutes.get("/pending", protect, authorize(UserRole.INSPECTOR), InspectionController.getPending as any);
 
@@ -133,5 +116,28 @@ inspectionRoutes.get("/pending", protect, authorize(UserRole.INSPECTOR), Inspect
  *     tags: [Inspections]
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of completed inspections
  */
 inspectionRoutes.get("/my-inspections", protect, authorize(UserRole.INSPECTOR), InspectionController.getMyInspections as any);
+
+/**
+ * @swagger
+ * /api/inspections/{orderId}:
+ *   get:
+ *     summary: Get inspection report for an order
+ *     tags: [Inspections]
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Inspection details
+ *       404:
+ *         description: Not found
+ */
+inspectionRoutes.get("/:orderId", InspectionController.getByOrder as any);

@@ -389,4 +389,96 @@ export class AuthController {
       res.status(500).json({ success: false, message: err.message });
     }
   }
+
+  // POST /api/auth/change-password
+  // Body: { currentPassword, newPassword }
+  // Requires Authentication Middleware
+  static async changePassword(req: any, res: Response) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const userId = req.user.id;
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ success: false, message: "Missing passwords" });
+      }
+
+      const user = await User.findById(userId);
+      if (!user || !user.passwordHash) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isMatch) {
+        return res.status(400).json({ success: false, message: "Incorrect current password" });
+      }
+
+      const salt = await bcrypt.genSalt(10);
+      user.passwordHash = await bcrypt.hash(newPassword, salt);
+      await user.save();
+
+      res.json({ success: true, message: "Password updated successfully" });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // POST /api/auth/forgot-password
+  // Body: { email }
+  static async forgotPassword(req: Request, res: Response) {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ success: false, message: "Email required" });
+
+      const user = await User.findOne({ email });
+      if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+      // Generate OTP
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+      await Otp.findOneAndUpdate(
+        { identifier: `reset:${email}` },
+        { code, expiresAt },
+        { upsert: true, new: true }
+      );
+
+      // Send Email
+      const subject = "VeloBike - Password Reset OTP";
+      const html = `<p>Your password reset code is: <strong>${code}</strong></p>`;
+      await EmailService.sendEmail({ to: email, subject, html });
+
+      res.json({ success: true, message: "Reset OTP sent to email" });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // POST /api/auth/reset-password
+  // Body: { email, code, newPassword }
+  static async resetPassword(req: Request, res: Response) {
+    try {
+      const { email, code, newPassword } = req.body;
+      if (!email || !code || !newPassword) {
+        return res.status(400).json({ success: false, message: "Missing fields" });
+      }
+
+      const record = await Otp.findOne({ identifier: `reset:${email}` });
+      if (!record || record.code !== code || new Date() > record.expiresAt) {
+        return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+      }
+
+      const user = await User.findOne({ email });
+      if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+      const salt = await bcrypt.genSalt(10);
+      user.passwordHash = await bcrypt.hash(newPassword, salt);
+      await user.save();
+
+      await Otp.deleteOne({ _id: record._id });
+
+      res.json({ success: true, message: "Password reset successfully" });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
 }
