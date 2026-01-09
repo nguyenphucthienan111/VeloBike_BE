@@ -44,3 +44,25 @@ paymentRoutes.post(
  *         description: Webhook processed
  */
 paymentRoutes.post("/webhook", PaymentController.handleWebhook as any);
+
+/**
+ * @swagger
+ * /api/payment/info/{orderCode}:
+ *   get:
+ *     summary: Get payment information
+ *     tags: [Payment]
+ *     security:
+ *       - bearerAuth: []
+ */
+paymentRoutes.get("/info/:orderCode", protect, PaymentController.getPaymentInfo as any);
+
+/**
+ * @swagger
+ * /api/payment/refund/{orderId}:
+ *   post:
+ *     summary: Refund payment (Admin only)
+ *     tags: [Payment]
+ *     security:
+ *       - bearerAuth: []
+ */
+paymentRoutes.post("/refund/:orderId", protect, authorize(UserRole.ADMIN), PaymentController.refund as any);
