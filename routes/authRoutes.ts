@@ -36,11 +36,41 @@ export const authRoutes = Router();
  *                 default: GUEST
  *     responses:
  *       201:
- *         description: User created successfully
+ *         description: User created successfully (verification email sent)
  *       400:
  *         description: Email already exists
  */
 authRoutes.post("/register", validationRules.register, validate, AuthController.register as any);
+
+/**
+ * @swagger
+ * /api/auth/verify-email:
+ *   post:
+ *     summary: Verify a user's email with OTP code
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: user@example.com
+ *               code:
+ *                 type: string
+ *                 example: "123456"
+ *     responses:
+ *       200:
+ *         description: Email verified successfully
+ *       400:
+ *         description: Invalid or expired code
+ */
+authRoutes.post("/verify-email", AuthController.verifyEmail as any);
 
 /**
  * @swagger

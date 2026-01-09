@@ -1,13 +1,4 @@
-/**
- * Email Notification Service
- * Basic email service using Nodemailer (or similar)
- * 
- * Note: This is a basic implementation. In production, use:
- * - Nodemailer with SMTP
- * - SendGrid
- * - AWS SES
- * - Mailgun
- */
+import nodemailer from "nodemailer";
 
 interface EmailOptions {
   to: string;
@@ -17,65 +8,106 @@ interface EmailOptions {
 }
 
 export class EmailService {
-  private static readonly FROM_EMAIL = process.env.FROM_EMAIL || "noreply@velobike.vn";
+  private static readonly FROM_EMAIL =
+    process.env.FROM_EMAIL || "noreply@velobike.vn";
   private static readonly FROM_NAME = process.env.FROM_NAME || "VeloBike";
 
+  // Lazily created transporter
+  private static transporter: nodemailer.Transporter | null = null;
+
+  private static getTransporter(): nodemailer.Transporter | null {
+    if (this.transporter) return this.transporter;
+
+    const host = process.env.SMTP_HOST;
+    const port = process.env.SMTP_PORT
+      ? parseInt(process.env.SMTP_PORT, 10)
+      : undefined;
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    if (!host || !port || !user || !pass) {
+      // SMTP not configured — keep transporter null to indicate mock mode
+      return null;
+    }
+
+    this.transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465, // true for 465, false for other ports
+      auth: {
+        user,
+        pass,
+      },
+    });
+
+    return this.transporter;
+  }
+
   /**
-   * Send email (mock implementation)
-   * In production, integrate with actual email service
+   * Send email. If SMTP configured in env, use Nodemailer. Otherwise fallback to console log (mock).
    */
   static async sendEmail(options: EmailOptions): Promise<boolean> {
     try {
-      // TODO: Implement actual email sending
-      // Example with Nodemailer:
-      /*
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || "587"),
-        secure: false,
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
+      // Debug log to help trace why emails from Swagger requests may not be sent
+      console.log("EmailService.sendEmail invoked", {
+        SMTP_HOST: process.env.SMTP_HOST,
+        SMTP_PORT: process.env.SMTP_PORT,
+        SMTP_USER: process.env.SMTP_USER ? '***' : undefined,
+        transporterInitialized: !!this.transporter,
+        to: options.to,
+        subject: options.subject,
       });
 
-      await transporter.sendMail({
-        from: `"${this.FROM_NAME}" <${this.FROM_EMAIL}>`,
+      const transporter = this.getTransporter();
+      const from = `"${this.FROM_NAME}" <${this.FROM_EMAIL}>`;
+
+      if (!transporter) {
+        // Mock mode
+        console.log("[EMAIL MOCK]", {
+          from,
+          to: options.to,
+          subject: options.subject,
+          text: options.text,
+          html: options.html,
+        });
+        return true;
+      }
+
+      const info = await transporter.sendMail({
+        from,
         to: options.to,
         subject: options.subject,
         text: options.text,
         html: options.html,
       });
-      */
 
-      // For now, just log
-      console.log(`[EMAIL] To: ${options.to}, Subject: ${options.subject}`);
+      console.log('EmailService.sendMail result:', info && (info.messageId || info.response));
       return true;
     } catch (error) {
-      console.error("Email sending error:", error);
+      console.error("Email sending error:", error && (error.message || error));
       return false;
     }
   }
 
-  /**
-   * Send order confirmation email to buyer
-   */
-  static async sendOrderConfirmation(buyerEmail: string, orderId: string, orderDetails: any): Promise<boolean> {
+  static async sendOrderConfirmation(
+    buyerEmail: string,
+    orderId: string,
+    orderDetails: any
+  ): Promise<boolean> {
     const subject = `Xác nhận đơn hàng #${orderId}`;
     const html = `
       <h2>Xác nhận đơn hàng</h2>
       <p>Cảm ơn bạn đã đặt hàng tại VeloBike!</p>
       <p><strong>Mã đơn hàng:</strong> ${orderId}</p>
-      <p><strong>Tổng tiền:</strong> ${orderDetails.totalAmount?.toLocaleString("vi-VN")} VND</p>
+      <p><strong>Tổng tiền:</strong> ${orderDetails.totalAmount?.toLocaleString(
+        "vi-VN"
+      )} VND</p>
       <p>Chúng tôi sẽ thông báo cho bạn khi đơn hàng được xử lý.</p>
     `;
 
     return this.sendEmail({ to: buyerEmail, subject, html });
   }
 
-  /**
-   * Send payment confirmation email
-   */
   static async sendPaymentConfirmation(
     buyerEmail: string,
     orderId: string,
@@ -92,9 +124,6 @@ export class EmailService {
     return this.sendEmail({ to: buyerEmail, subject, html });
   }
 
-  /**
-   * Send inspection result email
-   */
   static async sendInspectionResult(
     buyerEmail: string,
     sellerEmail: string,
@@ -106,37 +135,52 @@ export class EmailService {
     const html = `
       <h2>Kết quả kiểm định</h2>
       <p>Đơn hàng #${orderId} đã hoàn tất kiểm định.</p>
-      <p><strong>Kết quả:</strong> ${verdict === "PASSED" ? "✅ ĐẠT" : verdict === "FAILED" ? "❌ KHÔNG ĐẠT" : "⚠️ CẦN ĐIỀU CHỈNH"}</p>
+      <p><strong>Kết quả:</strong> ${
+        verdict === "PASSED"
+          ? "✅ ĐẠT"
+          : verdict === "FAILED"
+          ? "❌ KHÔNG ĐẠT"
+          : "⚠️ CẦN ĐIỀU CHỈNH"
+      }</p>
       <p><strong>Điểm số:</strong> ${score}/10</p>
-      ${verdict === "PASSED" ? "<p>Xe đã được phê duyệt và sẽ được vận chuyển sớm.</p>" : ""}
-      ${verdict === "FAILED" ? "<p>Xe không đạt yêu cầu. Tiền sẽ được hoàn lại.</p>" : ""}
+      ${
+        verdict === "PASSED"
+          ? "<p>Xe đã được phê duyệt và sẽ được vận chuyển sớm.</p>"
+          : ""
+      }
+      ${
+        verdict === "FAILED"
+          ? "<p>Xe không đạt yêu cầu. Tiền sẽ được hoàn lại.</p>"
+          : ""
+      }
     `;
 
-    // Send to both buyer and seller
     await this.sendEmail({ to: buyerEmail, subject, html });
     await this.sendEmail({ to: sellerEmail, subject, html });
 
     return true;
   }
 
-  /**
-   * Send order shipped notification
-   */
-  static async sendOrderShipped(buyerEmail: string, orderId: string, trackingNumber?: string): Promise<boolean> {
+  static async sendOrderShipped(
+    buyerEmail: string,
+    orderId: string,
+    trackingNumber?: string
+  ): Promise<boolean> {
     const subject = `Đơn hàng #${orderId} đã được gửi`;
     const html = `
       <h2>Đơn hàng đã được gửi</h2>
       <p>Đơn hàng #${orderId} của bạn đã được gửi đi.</p>
-      ${trackingNumber ? `<p><strong>Mã vận đơn:</strong> ${trackingNumber}</p>` : ""}
+      ${
+        trackingNumber
+          ? `<p><strong>Mã vận đơn:</strong> ${trackingNumber}</p>`
+          : ""
+      }
       <p>Bạn sẽ nhận được hàng trong vòng 3-5 ngày làm việc.</p>
     `;
 
     return this.sendEmail({ to: buyerEmail, subject, html });
   }
 
-  /**
-   * Send order completed notification
-   */
   static async sendOrderCompleted(
     buyerEmail: string,
     sellerEmail: string,
@@ -155,9 +199,6 @@ export class EmailService {
     return true;
   }
 
-  /**
-   * Send dispute notification to admin
-   */
   static async sendDisputeNotification(
     adminEmail: string,
     disputeId: string,
@@ -177,4 +218,3 @@ export class EmailService {
     return this.sendEmail({ to: adminEmail, subject, html });
   }
 }
-

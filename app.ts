@@ -1,3 +1,7 @@
+import dotenv from "dotenv";
+// Load .env as early as possible so EmailService and other modules read config
+dotenv.config();
+
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";

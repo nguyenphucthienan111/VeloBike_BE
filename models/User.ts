@@ -51,6 +51,7 @@ export interface IUser extends MongooseDocument {
     bankName?: string;
   };
   isActive?: boolean;
+  emailVerified?: boolean;
   createdAt: Date;
 }
 
@@ -100,6 +101,7 @@ const UserSchema = new Schema<IUser>(
       bankName: String,
     },
     isActive: { type: Boolean, default: true },
+    emailVerified: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

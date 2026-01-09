@@ -3,8 +3,10 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { User, UserRole, KycStatus } from "../models/User";
+import { EmailService } from "../services/EmailService";
 
 // Simple in-memory OTP store for demo (replace with persistent store in production)
+// Keys: phone:<phone> or email:<email>
 const otpStore: Record<string, { code: string; expiresAt: number }> = {};
 
 function generateToken(user: any) {
@@ -18,16 +20,22 @@ const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 export class AuthController {
   // POST /api/auth/register
+  // Creates user (email not verified yet) and sends verification OTP to email
   static async register(req: Request, res: Response) {
     try {
       const { email, password, fullName, role } = req.body;
 
       if (!email || !password || !fullName) {
-        return res.status(400).json({ success: false, message: "Missing fields" });
+        return res
+          .status(400)
+          .json({ success: false, message: "Missing fields" });
       }
 
       const existing = await User.findOne({ email });
-      if (existing) return res.status(400).json({ success: false, message: "Email already registered" });
+      if (existing)
+        return res
+          .status(400)
+          .json({ success: false, message: "Email already registered" });
 
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(password, salt);
@@ -38,13 +46,95 @@ export class AuthController {
         fullName,
         role: role || UserRole.BUYER,
         kycStatus: KycStatus.PENDING,
-      });
+        emailVerified: false,
+      } as any);
 
       await newUser.save();
 
-      const token = generateToken(newUser);
+      // Generate email OTP (6 digits)
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
+      otpStore[`email:${email}`] = { code, expiresAt };
 
-      res.status(201).json({ success: true, token, user: { id: newUser._id, email: newUser.email, fullName: newUser.fullName, role: newUser.role } });
+      // Send verification email (best-effort)
+      const subject = "VeloBike - Xác thực email của bạn";
+      const html = `<p>Xin chào ${newUser.fullName},</p><p>Mã xác thực email của bạn là: <strong>${code}</strong></p><p>Mã có hiệu lực trong 15 phút.</p>`;
+      // Attempt to send and log result to server console for debugging (useful when requests come from Swagger UI)
+      const _sent = await EmailService.sendEmail({ to: email, subject, html });
+      console.log(
+        `AuthController.register: sendEmail -> ${email} => ${
+          _sent ? "OK" : "FAILED"
+        }`
+      );
+
+      // Return limited user data; token issued but emailVerified flag false
+      const token = generateToken(newUser);
+      res.status(201).json({
+        success: true,
+        message: "Tài khoản đã được tạo. Vui lòng kiểm tra email để xác thực.",
+        token,
+        user: {
+          id: newUser._id,
+          email: newUser.email,
+          fullName: newUser.fullName,
+          role: newUser.role,
+          emailVerified: false,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // POST /api/auth/verify-email
+  // Body: { email, code }
+  static async verifyEmail(req: Request, res: Response) {
+    try {
+      const { email, code } = req.body;
+      if (!email || !code)
+        return res
+          .status(400)
+          .json({ success: false, message: "Email and code required" });
+
+      const key = `email:${email}`;
+      const record = otpStore[key];
+      if (!record)
+        return res
+          .status(400)
+          .json({ success: false, message: "No verification code found" });
+      if (Date.now() > record.expiresAt)
+        return res
+          .status(400)
+          .json({ success: false, message: "Verification code expired" });
+      if (record.code !== code)
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid verification code" });
+
+      const user = await User.findOne({ email });
+      if (!user)
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+
+      user.emailVerified = true;
+      await user.save();
+
+      // Clean up OTP
+      delete otpStore[key];
+
+      const token = generateToken(user);
+      res.json({
+        success: true,
+        message: "Email verified",
+        token,
+        user: {
+          id: user._id,
+          email: user.email,
+          fullName: user.fullName,
+          emailVerified: true,
+        },
+      });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -54,16 +144,35 @@ export class AuthController {
   static async login(req: Request, res: Response) {
     try {
       const { email, password } = req.body;
-      if (!email || !password) return res.status(400).json({ success: false, message: "Missing credentials" });
+      if (!email || !password)
+        return res
+          .status(400)
+          .json({ success: false, message: "Missing credentials" });
 
       const user = await User.findOne({ email });
-      if (!user || !user.passwordHash) return res.status(401).json({ success: false, message: "Invalid credentials" });
+      if (!user || !user.passwordHash)
+        return res
+          .status(401)
+          .json({ success: false, message: "Invalid credentials" });
 
       const match = await bcrypt.compare(password, user.passwordHash);
-      if (!match) return res.status(401).json({ success: false, message: "Invalid credentials" });
+      if (!match)
+        return res
+          .status(401)
+          .json({ success: false, message: "Invalid credentials" });
 
       const token = generateToken(user);
-      res.json({ success: true, token, user: { id: user._id, email: user.email, fullName: user.fullName, role: user.role } });
+      res.json({
+        success: true,
+        token,
+        user: {
+          id: user._id,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role,
+          emailVerified: (user as any).emailVerified,
+        },
+      });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -74,13 +183,22 @@ export class AuthController {
   static async googleLogin(req: Request, res: Response) {
     try {
       const { googleToken } = req.body;
-      if (!googleToken) return res.status(400).json({ success: false, message: "googleToken is required" });
+      if (!googleToken)
+        return res
+          .status(400)
+          .json({ success: false, message: "googleToken is required" });
 
       // Verify token with Google
-      const ticket = await googleClient.verifyIdToken({ idToken: googleToken, audience: GOOGLE_CLIENT_ID });
+      const ticket = await googleClient.verifyIdToken({
+        idToken: googleToken,
+        audience: GOOGLE_CLIENT_ID,
+      });
       const payload = ticket.getPayload();
 
-      if (!payload || !payload.email) return res.status(400).json({ success: false, message: "Invalid Google token" });
+      if (!payload || !payload.email)
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid Google token" });
 
       const email = payload.email;
       const googleId = payload.sub;
@@ -102,15 +220,28 @@ export class AuthController {
           avatar: picture,
           role: UserRole.BUYER,
           kycStatus: KycStatus.PENDING,
-        });
+          emailVerified: true, // Google verified
+        } as any);
         await user.save();
       }
 
       const token = generateToken(user);
-      res.json({ success: true, token, user: { id: user._id, email: user.email, fullName: user.fullName, role: user.role } });
+      res.json({
+        success: true,
+        token,
+        user: {
+          id: user._id,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role,
+        },
+      });
     } catch (err: any) {
       console.error("Google login error:", err.message || err);
-      res.status(500).json({ success: false, message: err.message || "Google authentication failed" });
+      res.status(500).json({
+        success: false,
+        message: err.message || "Google authentication failed",
+      });
     }
   }
 
@@ -119,12 +250,15 @@ export class AuthController {
   static async sendOtp(req: Request, res: Response) {
     try {
       const { phone } = req.body;
-      if (!phone) return res.status(400).json({ success: false, message: "Phone is required" });
+      if (!phone)
+        return res
+          .status(400)
+          .json({ success: false, message: "Phone is required" });
 
       // Generate 6-digit code
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
-      otpStore[phone] = { code, expiresAt };
+      otpStore[`phone:${phone}`] = { code, expiresAt };
 
       // TODO: integrate with SMS provider here
       console.log(`OTP for ${phone}: ${code}`);
@@ -140,17 +274,32 @@ export class AuthController {
   static async verifyOtp(req: Request, res: Response) {
     try {
       const { phone, code } = req.body;
-      if (!phone || !code) return res.status(400).json({ success: false, message: "Phone and code required" });
+      if (!phone || !code)
+        return res
+          .status(400)
+          .json({ success: false, message: "Phone and code required" });
 
-      const record = otpStore[phone];
-      if (!record) return res.status(400).json({ success: false, message: "No OTP found" });
-      if (Date.now() > record.expiresAt) return res.status(400).json({ success: false, message: "OTP expired" });
-      if (record.code !== code) return res.status(400).json({ success: false, message: "Invalid OTP" });
+      const key = `phone:${phone}`;
+      const record = otpStore[key];
+      if (!record)
+        return res
+          .status(400)
+          .json({ success: false, message: "No OTP found" });
+      if (Date.now() > record.expiresAt)
+        return res.status(400).json({ success: false, message: "OTP expired" });
+      if (record.code !== code)
+        return res.status(400).json({ success: false, message: "Invalid OTP" });
 
       // OTP valid. Find or create user by phone
       let user = await User.findOne({ phone });
       if (!user) {
-        user = new User({ email: `phone_${phone}@velobike.local`, fullName: `Phone User ${phone}`, phone, role: UserRole.BUYER, kycStatus: KycStatus.PENDING });
+        user = new User({
+          email: `phone_${phone}@velobike.local`,
+          fullName: `Phone User ${phone}`,
+          phone,
+          role: UserRole.BUYER,
+          kycStatus: KycStatus.PENDING,
+        } as any);
         await user.save();
       }
 
@@ -158,9 +307,18 @@ export class AuthController {
       const token = generateToken(user);
 
       // Clean up OTP
-      delete otpStore[phone];
+      delete otpStore[key];
 
-      res.json({ success: true, token, user: { id: user._id, email: user.email, fullName: user.fullName, phone: user.phone } });
+      res.json({
+        success: true,
+        token,
+        user: {
+          id: user._id,
+          email: user.email,
+          fullName: user.fullName,
+          phone: user.phone,
+        },
+      });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
     }
