@@ -3,11 +3,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { User, UserRole, KycStatus } from "../models/User";
+import { Otp } from "../models/Otp";
 import { EmailService } from "../services/EmailService";
-
-// Simple in-memory OTP store for demo (replace with persistent store in production)
-// Keys: phone:<phone> or email:<email>
-const otpStore: Record<string, { code: string; expiresAt: number }> = {};
 
 function generateToken(user: any) {
   const payload = { id: user._id.toString(), role: user.role };
@@ -53,8 +50,14 @@ export class AuthController {
 
       // Generate email OTP (6 digits)
       const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
-      otpStore[`email:${email}`] = { code, expiresAt };
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      // Save to DB (upsert)
+      await Otp.findOneAndUpdate(
+        { identifier: `email:${email}` },
+        { code, expiresAt },
+        { upsert: true, new: true }
+      );
 
       // Send verification email (best-effort)
       const subject = "VeloBike - Xác thực email của bạn";
@@ -96,16 +99,16 @@ export class AuthController {
           .status(400)
           .json({ success: false, message: "Email and code required" });
 
-      const key = `email:${email}`;
-      const record = otpStore[key];
+      const record = await Otp.findOne({ identifier: `email:${email}` });
+
       if (!record)
         return res
           .status(400)
-          .json({ success: false, message: "No verification code found" });
-      if (Date.now() > record.expiresAt)
-        return res
-          .status(400)
-          .json({ success: false, message: "Verification code expired" });
+          .json({
+            success: false,
+            message: "Invalid or expired verification code",
+          });
+
       if (record.code !== code)
         return res
           .status(400)
@@ -120,8 +123,8 @@ export class AuthController {
       user.emailVerified = true;
       await user.save();
 
-      // Clean up OTP
-      delete otpStore[key];
+      // Clean up OTP immediately
+      await Otp.deleteOne({ _id: record._id });
 
       const token = generateToken(user);
       res.json({
@@ -257,8 +260,14 @@ export class AuthController {
 
       // Generate 6-digit code
       const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
-      otpStore[`phone:${phone}`] = { code, expiresAt };
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+      // Save to DB
+      await Otp.findOneAndUpdate(
+        { identifier: `phone:${phone}` },
+        { code, expiresAt },
+        { upsert: true, new: true }
+      );
 
       // TODO: integrate with SMS provider here
       console.log(`OTP for ${phone}: ${code}`);
@@ -279,14 +288,13 @@ export class AuthController {
           .status(400)
           .json({ success: false, message: "Phone and code required" });
 
-      const key = `phone:${phone}`;
-      const record = otpStore[key];
+      const record = await Otp.findOne({ identifier: `phone:${phone}` });
+
       if (!record)
         return res
           .status(400)
-          .json({ success: false, message: "No OTP found" });
-      if (Date.now() > record.expiresAt)
-        return res.status(400).json({ success: false, message: "OTP expired" });
+          .json({ success: false, message: "Invalid or expired OTP" });
+
       if (record.code !== code)
         return res.status(400).json({ success: false, message: "Invalid OTP" });
 
@@ -306,8 +314,8 @@ export class AuthController {
       // Create token
       const token = generateToken(user);
 
-      // Clean up OTP
-      delete otpStore[key];
+      // Clean up OTP immediately
+      await Otp.deleteOne({ _id: record._id });
 
       res.json({
         success: true,

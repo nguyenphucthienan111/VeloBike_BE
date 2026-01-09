@@ -46,7 +46,11 @@ export class MessageController {
     } catch (error: any) {
       res
         .status(500)
-        .json({ success: false, message: "Error creating conversation", error: error.message });
+        .json({
+          success: false,
+          message: "Error creating conversation",
+          error: error.message,
+        });
     }
   }
 
@@ -62,7 +66,9 @@ export class MessageController {
       // Verify conversation exists
       const conversation = await Conversation.findById(conversationId);
       if (!conversation) {
-        return res.status(404).json({ success: false, message: "Conversation not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Conversation not found" });
       }
 
       const message = new Message({
@@ -82,8 +88,13 @@ export class MessageController {
         lastMessageAt: new Date(),
       });
 
-      // TODO: Emit Socket.io event for real-time message
-      // io.to(conversationId).emit('new_message', message);
+      // Emit Socket.io event for real-time message
+      const io = (req as any).io;
+      if (io) {
+        io.to(conversationId).emit("new_message", message);
+        // Also notify receiver globally if they are online but not in the room
+        io.emit(`notify_user_${receiverId}`, { type: "NEW_MESSAGE", message });
+      }
 
       res.status(201).json({
         success: true,
@@ -93,7 +104,11 @@ export class MessageController {
     } catch (error: any) {
       res
         .status(500)
-        .json({ success: false, message: "Error sending message", error: error.message });
+        .json({
+          success: false,
+          message: "Error sending message",
+          error: error.message,
+        });
     }
   }
 
@@ -140,7 +155,11 @@ export class MessageController {
     } catch (error: any) {
       res
         .status(500)
-        .json({ success: false, message: "Error fetching messages", error: error.message });
+        .json({
+          success: false,
+          message: "Error fetching messages",
+          error: error.message,
+        });
     }
   }
 
@@ -182,7 +201,11 @@ export class MessageController {
     } catch (error: any) {
       res
         .status(500)
-        .json({ success: false, message: "Error fetching conversations", error: error.message });
+        .json({
+          success: false,
+          message: "Error fetching conversations",
+          error: error.message,
+        });
     }
   }
 
@@ -206,7 +229,11 @@ export class MessageController {
     } catch (error: any) {
       res
         .status(500)
-        .json({ success: false, message: "Error fetching unread count", error: error.message });
+        .json({
+          success: false,
+          message: "Error fetching unread count",
+          error: error.message,
+        });
     }
   }
 
@@ -234,7 +261,11 @@ export class MessageController {
     } catch (error: any) {
       res
         .status(500)
-        .json({ success: false, message: "Error marking as read", error: error.message });
+        .json({
+          success: false,
+          message: "Error marking as read",
+          error: error.message,
+        });
     }
   }
 
@@ -249,14 +280,19 @@ export class MessageController {
 
       const message = await Message.findById(messageId);
       if (!message) {
-        return res.status(404).json({ success: false, message: "Message not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Message not found" });
       }
 
       // Only sender can delete
       if (message.senderId.toString() !== userId) {
         return res
           .status(403)
-          .json({ success: false, message: "You can only delete your own messages" });
+          .json({
+            success: false,
+            message: "You can only delete your own messages",
+          });
       }
 
       await Message.findByIdAndDelete(messageId);
@@ -268,7 +304,11 @@ export class MessageController {
     } catch (error: any) {
       res
         .status(500)
-        .json({ success: false, message: "Error deleting message", error: error.message });
+        .json({
+          success: false,
+          message: "Error deleting message",
+          error: error.message,
+        });
     }
   }
 
@@ -294,7 +334,11 @@ export class MessageController {
     } catch (error: any) {
       res
         .status(500)
-        .json({ success: false, message: "Error closing conversation", error: error.message });
+        .json({
+          success: false,
+          message: "Error closing conversation",
+          error: error.message,
+        });
     }
   }
 }

@@ -53,6 +53,13 @@ if (!fs.existsSync(uploadDir)) {
 // Middleware
 app.use(cors());
 app.use(express.json() as any);
+
+// Inject Socket.io into Request object so Controllers can use it
+app.use((req: any, res, next) => {
+  req.io = io;
+  next();
+});
+
 // Serve uploaded files statically so frontend can view them
 app.use("/uploads", express.static(path.join(__dirname, "uploads")) as any);
 

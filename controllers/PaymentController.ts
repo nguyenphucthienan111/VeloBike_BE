@@ -19,16 +19,25 @@ export class PaymentController {
           .status(400)
           .json({ message: "Order is not eligible for payment" });
 
-      // --- MOCK PAYMENT GATEWAY LOGIC ---
-      // In reality, call PayOS.createPaymentLink() here
-      const amount = order.financials.totalAmount;
-      const paymentLink = `https://mock-payment-gateway.com/checkout?orderId=${orderId}&amount=${amount}`;
-      // ----------------------------------
+      // Define return and cancel URLs (should be configured in .env or passed from frontend)
+      const returnUrl =
+        process.env.PAYMENT_RETURN_URL ||
+        "http://localhost:3000/payment/success";
+      const cancelUrl =
+        process.env.PAYMENT_CANCEL_URL ||
+        "http://localhost:3000/payment/cancel";
+
+      // Call Real Payment Service
+      const { paymentLink, orderCode } = await PaymentService.createPaymentLink(
+        orderId,
+        returnUrl,
+        cancelUrl
+      );
 
       res.json({
         success: true,
         paymentLink,
-        orderId,
+        orderCode,
       });
     } catch (error: any) {
       res.status(500).json({ success: false, message: error.message });
@@ -40,13 +49,20 @@ export class PaymentController {
   static async handleWebhook(req: Request, res: Response) {
     try {
       // Validate signature header if provided
-      const signatureHeader = (req.headers["x-payos-signature"] || req.headers["x-signature"] || req.headers["signature"]) as string | undefined;
+      const signatureHeader = (req.headers["x-payos-signature"] ||
+        req.headers["x-signature"] ||
+        req.headers["signature"]) as string | undefined;
 
       if (signatureHeader) {
-        const valid = PaymentService.verifyWebhookSignature(req.body, signatureHeader);
+        const valid = PaymentService.verifyWebhookSignature(
+          req.body,
+          signatureHeader
+        );
         if (!valid) {
           console.warn("Invalid webhook signature");
-          return res.status(403).json({ success: false, message: "Invalid signature" });
+          return res
+            .status(403)
+            .json({ success: false, message: "Invalid signature" });
         }
       }
 
@@ -56,7 +72,9 @@ export class PaymentController {
       res.json({ success: true });
     } catch (error: any) {
       console.error("Webhook Error:", error);
-      res.status(500).json({ success: false, message: (error as Error).message });
+      res
+        .status(500)
+        .json({ success: false, message: (error as Error).message });
     }
   }
 
@@ -68,7 +86,9 @@ export class PaymentController {
       const orderCodeNum = parseInt(orderCode);
 
       if (isNaN(orderCodeNum)) {
-        return res.status(400).json({ success: false, message: "Invalid order code" });
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid order code" });
       }
 
       const paymentInfo = await PaymentService.getPaymentInfo(orderCodeNum);
@@ -93,7 +113,11 @@ export class PaymentController {
       await PaymentService.refundPayment(orderId);
 
       // Update order status
-      await OrderService.refundOrder(orderId, (req as any).user.id, "Refunded by admin");
+      await OrderService.refundOrder(
+        orderId,
+        (req as any).user.id,
+        "Refunded by admin"
+      );
 
       res.json({ success: true, message: "Refund processed" });
     } catch (error: any) {
