@@ -52,7 +52,7 @@ export class EmailService {
       console.log("EmailService.sendEmail invoked", {
         SMTP_HOST: process.env.SMTP_HOST,
         SMTP_PORT: process.env.SMTP_PORT,
-        SMTP_USER: process.env.SMTP_USER ? '***' : undefined,
+        SMTP_USER: process.env.SMTP_USER ? "***" : undefined,
         transporterInitialized: !!this.transporter,
         to: options.to,
         subject: options.subject,
@@ -81,10 +81,17 @@ export class EmailService {
         html: options.html,
       });
 
-      console.log('EmailService.sendMail result:', info && (info.messageId || info.response));
+      console.log(
+        "EmailService.sendMail result:",
+        info && (info.messageId || info.response)
+      );
       return true;
-    } catch (error) {
-      console.error("Email sending error:", error && (error.message || error));
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Email sending error:", error.message);
+      } else {
+        console.error("Email sending error:", error);
+      }
       return false;
     }
   }
