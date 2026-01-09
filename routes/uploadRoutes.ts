@@ -35,3 +35,33 @@ uploadRoutes.post(
   upload.single("image") as any,
   UploadController.uploadImage as any
 );
+
+/**
+ * @swagger
+ * /api/upload/360:
+ *   post:
+ *     summary: Upload 36 images for 360 view
+ *     tags: [Upload]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *     responses:
+ *       200:
+ *         description: Images uploaded, returns array of URLs
+ */
+uploadRoutes.post(
+  "/360",
+  protect as any,
+  upload.array("images", 72) as any, // Allow up to 72 frames
+  UploadController.upload360 as any
+);
