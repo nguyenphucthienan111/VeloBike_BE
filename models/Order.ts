@@ -15,6 +15,7 @@ export enum OrderStatus {
   COMPLETED = "COMPLETED", // Money released to seller
   DISPUTED = "DISPUTED",
   REFUNDED = "REFUNDED",
+  CANCELLED = "CANCELLED", // Cancelled before payment/shipping
 }
 
 export interface IOrder extends MongooseDocument {

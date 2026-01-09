@@ -389,12 +389,10 @@ export class InspectionController {
       }
 
       if (order.status !== OrderStatus.IN_INSPECTION) {
-        res
-          .status(400)
-          .json({
-            success: false,
-            message: "Order is not in inspection phase",
-          });
+        res.status(400).json({
+          success: false,
+          message: "Order is not in inspection phase",
+        });
         return;
       }
 
@@ -406,6 +404,16 @@ export class InspectionController {
 
       // 3. Auto-determine verdict if not provided or if score suggests different verdict
       let finalVerdict = overallVerdict;
+
+      // LOGIC FIX: Check for CRITICAL failures
+      // Nếu có bất kỳ lỗi CRITICAL nào, verdict bắt buộc phải là FAILED
+      const hasCriticalFail = checkpoints.some(
+        (cp: any) => cp.status === "FAIL" && cp.severity === "CRITICAL"
+      );
+      if (hasCriticalFail) {
+        finalVerdict = "FAILED";
+      }
+
       if (!finalVerdict) {
         if (finalScore >= 7) {
           finalVerdict = "PASSED";
@@ -426,6 +434,16 @@ export class InspectionController {
         inspectorNote,
       });
       await newInspection.save();
+
+      // UPDATE LISTING: Sync inspection result to the Listing
+      // This fulfills the requirement: "Gắn nhãn Xe đã kiểm định"
+      if (finalVerdict === "PASSED" || finalVerdict === "SUGGEST_ADJUSTMENT") {
+        await Listing.findByIdAndUpdate(order.listingId, {
+          inspectionScore: finalScore,
+          inspectionReport: newInspection._id,
+          // Note: We don't change Listing status here, OrderService handles that flow
+        });
+      }
 
       // 5. Trigger Order State Machine
       const orderService = new OrderService();
@@ -488,11 +506,13 @@ export class InspectionController {
   static async getChecklist(req: any, res: any) {
     try {
       const { bikeType } = req.params;
-      
+
       if (!Object.values(BikeType).includes(bikeType as BikeType)) {
         return res.status(400).json({
           success: false,
-          message: `Invalid bike type. Must be one of: ${Object.values(BikeType).join(", ")}`,
+          message: `Invalid bike type. Must be one of: ${Object.values(
+            BikeType
+          ).join(", ")}`,
         });
       }
 
@@ -557,7 +577,9 @@ export class InspectionController {
     try {
       const inspectorId = req.user?.id;
       if (!inspectorId) {
-        return res.status(401).json({ success: false, message: "Unauthorized" });
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
       }
 
       const { page = 1, limit = 20 } = req.query;
@@ -600,7 +622,9 @@ export class InspectionController {
     try {
       const inspectorId = req.user?.id;
       if (!inspectorId) {
-        return res.status(401).json({ success: false, message: "Unauthorized" });
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
       }
 
       const { page = 1, limit = 20 } = req.query;

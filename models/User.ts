@@ -36,6 +36,11 @@ export interface IUser extends MongooseDocument {
     documentType?: string;
     verifiedAt?: Date;
   };
+  bodyMeasurements?: {
+    height?: number;
+    inseam?: number;
+    weight?: number;
+  };
   wallet: {
     balance: number;
     currency: string;
@@ -52,6 +57,8 @@ export interface IUser extends MongooseDocument {
   };
   isActive?: boolean;
   emailVerified?: boolean;
+  resetPasswordToken?: string;
+  resetPasswordExpire?: Date;
   createdAt: Date;
 }
 
@@ -107,6 +114,8 @@ const UserSchema = new Schema<IUser>(
     },
     isActive: { type: Boolean, default: true },
     emailVerified: { type: Boolean, default: false },
+    resetPasswordToken: String,
+    resetPasswordExpire: Date,
   },
   { timestamps: true }
 );
