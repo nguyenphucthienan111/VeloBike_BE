@@ -1,5 +1,8 @@
 import { Router } from "express";
 import { InspectionController } from "../controllers/InspectionController";
+import { validationRules, validate } from "../middleware/validationMiddleware";
+import { protect, authorize } from "../middleware/authMiddleware";
+import { UserRole } from "../models/User";
 
 export const inspectionRoutes = Router();
 
@@ -45,7 +48,14 @@ export const inspectionRoutes = Router();
  *       201:
  *         description: Inspection submitted and Order status updated
  */
-inspectionRoutes.post("/", InspectionController.submitReport as any);
+inspectionRoutes.post(
+  "/",
+  protect,
+  authorize(UserRole.INSPECTOR),
+  validationRules.submitInspection,
+  validate,
+  InspectionController.submitReport as any
+);
 
 /**
  * @swagger
@@ -66,3 +76,62 @@ inspectionRoutes.post("/", InspectionController.submitReport as any);
  *         description: Not found
  */
 inspectionRoutes.get("/:orderId", InspectionController.getByOrder as any);
+
+/**
+ * @swagger
+ * /api/inspections/checklist/{bikeType}:
+ *   get:
+ *     summary: Get dynamic inspection checklist based on bike type
+ *     tags: [Inspections]
+ *     parameters:
+ *       - in: path
+ *         name: bikeType
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [ROAD, MTB, GRAVEL, TRIATHLON]
+ *     responses:
+ *       200:
+ *         description: Checklist for the specified bike type
+ */
+inspectionRoutes.get("/checklist/:bikeType", InspectionController.getChecklist as any);
+
+/**
+ * @swagger
+ * /api/inspections/checklist/order/{orderId}:
+ *   get:
+ *     summary: Get inspection checklist based on order's listing bike type
+ *     tags: [Inspections]
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Checklist for the order's bike type
+ */
+inspectionRoutes.get("/checklist/order/:orderId", InspectionController.getChecklistByOrder as any);
+
+/**
+ * @swagger
+ * /api/inspections/pending:
+ *   get:
+ *     summary: Get pending inspections for inspector
+ *     tags: [Inspections]
+ *     security:
+ *       - bearerAuth: []
+ */
+inspectionRoutes.get("/pending", protect, authorize(UserRole.INSPECTOR), InspectionController.getPending as any);
+
+/**
+ * @swagger
+ * /api/inspections/my-inspections:
+ *   get:
+ *     summary: Get inspector's completed inspections
+ *     tags: [Inspections]
+ *     security:
+ *       - bearerAuth: []
+ */
+inspectionRoutes.get("/my-inspections", protect, authorize(UserRole.INSPECTOR), InspectionController.getMyInspections as any);

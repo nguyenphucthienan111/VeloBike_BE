@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { ReviewController } from "../controllers/ReviewController";
+import { protect } from "../middleware/authMiddleware";
 
 export const reviewRoutes = Router();
 
@@ -136,4 +137,15 @@ reviewRoutes.get("/order/:orderId", ReviewController.getOrderReviews as any);
  *       200:
  *         description: Review deleted
  */
-reviewRoutes.delete("/:reviewId", ReviewController.deleteReview as any);
+reviewRoutes.delete("/:reviewId", protect, ReviewController.deleteReview as any);
+
+/**
+ * @swagger
+ * /api/reviews/my-reviews:
+ *   get:
+ *     summary: Get my reviews (reviews I wrote)
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ */
+reviewRoutes.get("/my-reviews", protect, ReviewController.getMyReviews as any);

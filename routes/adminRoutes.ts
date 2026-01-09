@@ -1,5 +1,8 @@
 import { Router } from "express";
 import { AdminController } from "../controllers/AdminController";
+import { CategoryController, BrandController } from "../controllers/CategoryController";
+import { protect, authorize } from "../middleware/authMiddleware";
+import { UserRole } from "../models/User";
 
 export const adminRoutes = Router();
 
@@ -263,3 +266,115 @@ adminRoutes.get("/settings", AdminController.getSettings as any);
  *         description: Settings updated
  */
 adminRoutes.put("/settings", AdminController.updateSettings as any);
+
+// Category Management Routes
+/**
+ * @swagger
+ * /api/admin/categories:
+ *   get:
+ *     summary: Get all categories
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ */
+adminRoutes.get("/categories", CategoryController.getAll as any);
+
+/**
+ * @swagger
+ * /api/admin/categories:
+ *   post:
+ *     summary: Create a new category
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ */
+adminRoutes.post("/categories", CategoryController.create as any);
+
+/**
+ * @swagger
+ * /api/admin/categories/{id}:
+ *   put:
+ *     summary: Update a category
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ */
+adminRoutes.put("/categories/:id", CategoryController.update as any);
+
+/**
+ * @swagger
+ * /api/admin/categories/{id}:
+ *   delete:
+ *     summary: Delete a category
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ */
+adminRoutes.delete("/categories/:id", CategoryController.delete as any);
+
+// Brand Management Routes
+/**
+ * @swagger
+ * /api/admin/brands:
+ *   get:
+ *     summary: Get all brands
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ */
+adminRoutes.get("/brands", BrandController.getAll as any);
+
+/**
+ * @swagger
+ * /api/admin/brands:
+ *   post:
+ *     summary: Create a new brand
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ */
+adminRoutes.post("/brands", BrandController.create as any);
+
+/**
+ * @swagger
+ * /api/admin/brands/{id}:
+ *   put:
+ *     summary: Update a brand
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ */
+adminRoutes.put("/brands/:id", BrandController.update as any);
+
+/**
+ * @swagger
+ * /api/admin/brands/{id}:
+ *   delete:
+ *     summary: Delete a brand
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ */
+adminRoutes.delete("/brands/:id", BrandController.delete as any);
+
+/**
+ * @swagger
+ * /api/admin/orders/{id}/payout:
+ *   put:
+ *     summary: Release payout to seller (Admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ */
+adminRoutes.put("/orders/:id/payout", protect, authorize(UserRole.ADMIN), AdminController.releasePayout as any);
+
+/**
+ * @swagger
+ * /api/admin/inspectors:
+ *   get:
+ *     summary: Get all inspectors
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ */
+adminRoutes.get("/inspectors", protect, authorize(UserRole.ADMIN), AdminController.getAllInspectors as any);

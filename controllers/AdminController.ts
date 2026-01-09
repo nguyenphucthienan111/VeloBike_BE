@@ -341,6 +341,79 @@ export class AdminController {
   }
 
   /**
+   * Release payout to seller (Admin only)
+   * PUT /api/admin/orders/:id/payout
+   */
+  static async releasePayout(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { PaymentService } = await import("../services/PaymentService");
+      const { OrderService } = await import("../services/OrderService");
+
+      const order = await Order.findById(id).populate("sellerId");
+      if (!order) {
+        return res.status(404).json({ success: false, message: "Order not found" });
+      }
+
+      if (order.status !== OrderStatus.DELIVERED) {
+        return res.status(400).json({
+          success: false,
+          message: "Order must be in DELIVERED status to release payout",
+        });
+      }
+
+      // Release payment to seller
+      await PaymentService.releasePayment(id, order.sellerId.toString());
+
+      // Complete the order
+      await OrderService.completeOrder(id, (req as any).user.id);
+
+      res.status(200).json({
+        success: true,
+        message: "Payout released and order completed",
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Get all inspectors
+   * GET /api/admin/inspectors
+   */
+  static async getAllInspectors(req: Request, res: Response) {
+    try {
+      const { isActive, page = 1, limit = 20 } = req.query;
+
+      const query: any = { role: UserRole.INSPECTOR };
+      if (isActive !== undefined) {
+        query.isActive = isActive === "true";
+      }
+
+      const inspectors = await User.find(query)
+        .select("-passwordHash")
+        .sort({ createdAt: -1 })
+        .skip((Number(page) - 1) * Number(limit))
+        .limit(Number(limit));
+
+      const total = await User.countDocuments(query);
+
+      res.status(200).json({
+        success: true,
+        data: inspectors,
+        pagination: {
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          pages: Math.ceil(total / Number(limit)),
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
    * Helper: Get date filter based on period
    */
   private static getDateFilter(period: string): Date {

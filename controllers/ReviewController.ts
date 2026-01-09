@@ -12,7 +12,7 @@ export class ReviewController {
   static async createReview(req: Request, res: Response) {
     try {
       const { orderId, rating, comment, categories, type } = req.body;
-      const reviewerId = (req as any).userId;
+      const reviewerId = (req as any).user?.id;
 
       // Validate order exists and is completed
       const order = await Order.findById(orderId);
@@ -213,7 +213,7 @@ export class ReviewController {
   static async deleteReview(req: Request, res: Response) {
     try {
       const { reviewId } = req.params;
-      const userId = (req as any).userId;
+      const userId = (req as any).user?.id;
 
       const review = await Review.findById(reviewId);
       if (!review) {
@@ -237,6 +237,48 @@ export class ReviewController {
       res
         .status(500)
         .json({ success: false, message: "Error deleting review", error: error.message });
+    }
+  }
+
+  /**
+   * Get my reviews (reviews I wrote)
+   * GET /api/reviews/my-reviews
+   */
+  static async getMyReviews(req: Request, res: Response) {
+    try {
+      const reviewerId = (req as any).user?.id;
+      if (!reviewerId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const { type, page = 1, limit = 20 } = req.query;
+
+      const query: any = { reviewerId };
+      if (type) {
+        query.type = type;
+      }
+
+      const reviews = await Review.find(query)
+        .populate("revieweeId", "fullName avatar reputation")
+        .populate("orderId", "listingId")
+        .sort({ createdAt: -1 })
+        .skip((Number(page) - 1) * Number(limit))
+        .limit(Number(limit));
+
+      const total = await Review.countDocuments(query);
+
+      res.status(200).json({
+        success: true,
+        data: reviews,
+        pagination: {
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          pages: Math.ceil(total / Number(limit)),
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 }

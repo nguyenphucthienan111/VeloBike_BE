@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { ListingController } from "../controllers/ListingController";
+import { validationRules, validate } from "../middleware/validationMiddleware";
+import { protect } from "../middleware/authMiddleware";
 
 export const listingRoutes = Router();
 
@@ -115,4 +117,116 @@ listingRoutes.get("/:id", ListingController.getById as any);
  *       201:
  *         description: Listing created
  */
-listingRoutes.post("/", ListingController.create as any);
+listingRoutes.post("/", protect, validationRules.createListing, validate, ListingController.create as any);
+
+/**
+ * @swagger
+ * /api/listings/nearby:
+ *   get:
+ *     summary: Find listings near a location (geolocation search)
+ *     tags: [Listings]
+ *     parameters:
+ *       - in: query
+ *         name: lat
+ *         required: true
+ *         schema:
+ *           type: number
+ *         description: Latitude
+ *       - in: query
+ *         name: lng
+ *         required: true
+ *         schema:
+ *           type: number
+ *         description: Longitude
+ *       - in: query
+ *         name: radius
+ *         schema:
+ *           type: number
+ *           default: 10
+ *         description: Search radius in kilometers
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         description: Filter by bike type
+ *     responses:
+ *       200:
+ *         description: Listings near the location
+ */
+listingRoutes.get("/nearby", ListingController.getNearby as any);
+
+/**
+ * @swagger
+ * /api/listings/fit-calculator:
+ *   post:
+ *     summary: Calculate bike fit based on rider measurements
+ *     tags: [Listings]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - riderHeight
+ *               - riderInseam
+ *             properties:
+ *               riderHeight:
+ *                 type: number
+ *                 description: Rider height in cm
+ *               riderInseam:
+ *                 type: number
+ *                 description: Rider inseam in cm
+ *               riderReach:
+ *                 type: number
+ *                 description: Preferred reach in mm (optional)
+ *               listingId:
+ *                 type: string
+ *                 description: Specific listing ID to check fit (optional)
+ *     responses:
+ *       200:
+ *         description: Fit calculation results
+ */
+listingRoutes.post("/fit-calculator", validationRules.fitCalculator, validate, ListingController.fitCalculator as any);
+
+/**
+ * @swagger
+ * /api/listings/my-listings:
+ *   get:
+ *     summary: Get seller's listings
+ *     tags: [Listings]
+ *     security:
+ *       - bearerAuth: []
+ */
+listingRoutes.get("/my-listings", protect, ListingController.getMyListings as any);
+
+/**
+ * @swagger
+ * /api/listings/{id}:
+ *   put:
+ *     summary: Update a listing (Seller only)
+ *     tags: [Listings]
+ *     security:
+ *       - bearerAuth: []
+ */
+listingRoutes.put("/:id", protect, ListingController.update as any);
+
+/**
+ * @swagger
+ * /api/listings/{id}:
+ *   delete:
+ *     summary: Delete a listing (Seller only)
+ *     tags: [Listings]
+ *     security:
+ *       - bearerAuth: []
+ */
+listingRoutes.delete("/:id", protect, ListingController.delete as any);
+
+/**
+ * @swagger
+ * /api/listings/{id}/view:
+ *   put:
+ *     summary: Increment view count
+ *     tags: [Listings]
+ */
+listingRoutes.put("/:id/view", ListingController.incrementView as any);

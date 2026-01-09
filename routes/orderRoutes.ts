@@ -1,8 +1,10 @@
 import { Router, Request, Response } from "express";
 import { OrderService } from "../services/OrderService";
+import { OrderController } from "../controllers/OrderController";
 import { UserRole } from "../models/User";
 import { OrderStatus } from "../models/Order";
 import { protect, AuthRequest } from "../middleware/authMiddleware";
+import { validationRules, validate } from "../middleware/validationMiddleware";
 
 export const orderRoutes = Router();
 
@@ -76,4 +78,61 @@ const transitionHandler = async (req: any, res: any) => {
   }
 };
 
+// Order CRUD APIs
+/**
+ * @swagger
+ * /api/orders:
+ *   post:
+ *     summary: Create a new order (Buyer)
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ */
+orderRoutes.post("/", protect, validationRules.createOrder, validate, OrderController.create as any);
+
+/**
+ * @swagger
+ * /api/orders:
+ *   get:
+ *     summary: Get user's orders
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ */
+orderRoutes.get("/", protect, OrderController.getMyOrders as any);
+
+/**
+ * @swagger
+ * /api/orders/{id}:
+ *   get:
+ *     summary: Get order details
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ */
+orderRoutes.get("/:id", protect, OrderController.getById as any);
+
+/**
+ * @swagger
+ * /api/orders/{id}/timeline:
+ *   get:
+ *     summary: Get order timeline
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ */
+orderRoutes.get("/:id/timeline", protect, OrderController.getTimeline as any);
+
+/**
+ * @swagger
+ * /api/orders/{id}/status:
+ *   put:
+ *     summary: Update order status (Seller/Buyer)
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ */
+orderRoutes.put("/:id/status", protect, OrderController.updateStatus as any);
+
+// Generic transition endpoint (for advanced use)
 orderRoutes.post("/:id/transition", protect, transitionHandler as any);

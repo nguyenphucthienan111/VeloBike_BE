@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { AuthController } from "../controllers/AuthController";
+import { validationRules, validate } from "../middleware/validationMiddleware";
 
 export const authRoutes = Router();
 
@@ -39,7 +40,7 @@ export const authRoutes = Router();
  *       400:
  *         description: Email already exists
  */
-authRoutes.post("/register", AuthController.register as any);
+authRoutes.post("/register", validationRules.register, validate, AuthController.register as any);
 
 /**
  * @swagger
@@ -80,7 +81,7 @@ authRoutes.post("/register", AuthController.register as any);
  *       401:
  *         description: Invalid credentials
  */
-authRoutes.post("/login", AuthController.login as any);
+authRoutes.post("/login", validationRules.login, validate, AuthController.login as any);
 
 /**
  * @swagger

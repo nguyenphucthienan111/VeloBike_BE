@@ -20,6 +20,7 @@ import { messageRoutes } from "./routes/messageRoutes";
 import { wishlistRoutes } from "./routes/wishlistRoutes";
 import { disputeRoutes } from "./routes/disputeRoutes";
 import { adminRoutes } from "./routes/adminRoutes";
+import { chatbotRoutes } from "./routes/chatbotRoutes";
 
 // Fix for missing Node.js type definitions
 declare var __dirname: string;
@@ -121,6 +122,8 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/disputes", disputeRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/chatbot", chatbotRoutes);
+app.use("/api/users", require("./routes/userRoutes").default);
 
 // Error Handling Middleware
 app.use((err: any, req: any, res: any, next: any) => {
