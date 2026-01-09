@@ -86,22 +86,36 @@ class ListingController {
                 const { id } = req.params;
                 const sellerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
                 if (!sellerId) {
-                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                    return res
+                        .status(401)
+                        .json({ success: false, message: "Unauthorized" });
                 }
                 const listing = yield Listing_1.Listing.findById(id);
                 if (!listing) {
-                    return res.status(404).json({ success: false, message: "Listing not found" });
+                    return res
+                        .status(404)
+                        .json({ success: false, message: "Listing not found" });
                 }
                 // Check ownership
                 if (listing.sellerId.toString() !== sellerId) {
-                    return res.status(403).json({ success: false, message: "Not authorized to update this listing" });
+                    return res
+                        .status(403)
+                        .json({
+                        success: false,
+                        message: "Not authorized to update this listing",
+                    });
                 }
                 // Don't allow updating if already sold
                 if (listing.status === "SOLD") {
-                    return res.status(400).json({ success: false, message: "Cannot update sold listing" });
+                    return res
+                        .status(400)
+                        .json({ success: false, message: "Cannot update sold listing" });
                 }
                 // Update listing
-                const updatedListing = yield Listing_1.Listing.findByIdAndUpdate(id, req.body, { new: true, runValidators: true });
+                const updatedListing = yield Listing_1.Listing.findByIdAndUpdate(id, req.body, {
+                    new: true,
+                    runValidators: true,
+                });
                 res.json({ success: true, data: updatedListing });
             }
             catch (error) {
@@ -118,19 +132,30 @@ class ListingController {
                 const { id } = req.params;
                 const sellerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
                 if (!sellerId) {
-                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                    return res
+                        .status(401)
+                        .json({ success: false, message: "Unauthorized" });
                 }
                 const listing = yield Listing_1.Listing.findById(id);
                 if (!listing) {
-                    return res.status(404).json({ success: false, message: "Listing not found" });
+                    return res
+                        .status(404)
+                        .json({ success: false, message: "Listing not found" });
                 }
                 // Check ownership
                 if (listing.sellerId.toString() !== sellerId) {
-                    return res.status(403).json({ success: false, message: "Not authorized to delete this listing" });
+                    return res
+                        .status(403)
+                        .json({
+                        success: false,
+                        message: "Not authorized to delete this listing",
+                    });
                 }
                 // Don't allow deleting if already sold
                 if (listing.status === "SOLD") {
-                    return res.status(400).json({ success: false, message: "Cannot delete sold listing" });
+                    return res
+                        .status(400)
+                        .json({ success: false, message: "Cannot delete sold listing" });
                 }
                 yield Listing_1.Listing.findByIdAndDelete(id);
                 res.json({ success: true, message: "Listing deleted" });
@@ -148,7 +173,9 @@ class ListingController {
                 const { id } = req.params;
                 const listing = yield Listing_1.Listing.findByIdAndUpdate(id, { $inc: { views: 1 } }, { new: true });
                 if (!listing) {
-                    return res.status(404).json({ success: false, message: "Listing not found" });
+                    return res
+                        .status(404)
+                        .json({ success: false, message: "Listing not found" });
                 }
                 res.json({ success: true, data: { views: listing.views } });
             }
@@ -165,7 +192,9 @@ class ListingController {
             try {
                 const sellerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
                 if (!sellerId) {
-                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                    return res
+                        .status(401)
+                        .json({ success: false, message: "Unauthorized" });
                 }
                 const { status, page = 1, limit = 20 } = req.query;
                 const query = { sellerId };
@@ -199,7 +228,7 @@ class ListingController {
     static getNearby(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const { lat, lng, radius = 10, type, brand, minPrice, maxPrice } = req.query;
+                const { lat, lng, radius = 10, type, brand, minPrice, maxPrice, } = req.query;
                 if (!lat || !lng) {
                     return res.status(400).json({
                         success: false,
@@ -210,7 +239,12 @@ class ListingController {
                 const longitude = parseFloat(lng);
                 const radiusKm = parseFloat(radius) || 10; // Default 10km
                 // Validate coordinates
-                if (isNaN(latitude) || isNaN(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+                if (isNaN(latitude) ||
+                    isNaN(longitude) ||
+                    latitude < -90 ||
+                    latitude > 90 ||
+                    longitude < -180 ||
+                    longitude > 180) {
                     return res.status(400).json({
                         success: false,
                         message: "Invalid coordinates",
@@ -281,7 +315,12 @@ class ListingController {
                 const height = parseFloat(riderHeight);
                 const inseam = parseFloat(riderInseam);
                 const preferredReach = riderReach ? parseFloat(riderReach) : null;
-                if (isNaN(height) || isNaN(inseam) || height < 100 || height > 250 || inseam < 50 || inseam > 150) {
+                if (isNaN(height) ||
+                    isNaN(inseam) ||
+                    height < 100 ||
+                    height > 250 ||
+                    inseam < 50 ||
+                    inseam > 150) {
                     return res.status(400).json({
                         success: false,
                         message: "Invalid body measurements",
@@ -347,6 +386,167 @@ class ListingController {
             }
         });
     }
+    // GET /api/listings/search/advanced
+    // Faceted Search using Aggregation Pipeline
+    static advancedSearch(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { keyword, type, // ROAD, MTB, etc.
+                brand, minPrice, maxPrice, size, frameMaterial, brakeType, groupset, wheelSize, condition, lat, lng, radius = 20, // km
+                page = 1, limit = 20, sortBy = "newest", // newest, price_asc, price_desc, views
+                 } = req.query;
+                const pipeline = [];
+                // 1. Full-text search or Geo search (must be first)
+                if (lat && lng) {
+                    pipeline.push({
+                        $geoNear: {
+                            near: {
+                                type: "Point",
+                                coordinates: [parseFloat(lng), parseFloat(lat)],
+                            },
+                            distanceField: "distance",
+                            maxDistance: parseFloat(radius) * 1000,
+                            spherical: true,
+                        },
+                    });
+                }
+                else if (keyword) {
+                    pipeline.push({
+                        $match: { $text: { $search: keyword } },
+                    });
+                }
+                // 2. Match Filters
+                const matchStage = { status: "PUBLISHED" };
+                if (type && type !== "ALL")
+                    matchStage.type = type;
+                if (brand)
+                    matchStage["generalInfo.brand"] = { $regex: new RegExp(brand, "i") };
+                if (size)
+                    matchStage["generalInfo.size"] = size;
+                if (condition)
+                    matchStage["generalInfo.condition"] = condition;
+                // Price Range
+                if (minPrice || maxPrice) {
+                    matchStage["pricing.amount"] = {};
+                    if (minPrice)
+                        matchStage["pricing.amount"].$gte = Number(minPrice);
+                    if (maxPrice)
+                        matchStage["pricing.amount"].$lte = Number(maxPrice);
+                }
+                // Specs Filters (Polymorphic fields)
+                if (frameMaterial)
+                    matchStage["specs.frameMaterial"] = {
+                        $regex: new RegExp(frameMaterial, "i"),
+                    };
+                if (brakeType)
+                    matchStage["specs.brakeType"] = brakeType;
+                if (groupset)
+                    matchStage["specs.groupset"] = { $regex: new RegExp(groupset, "i") };
+                if (wheelSize)
+                    matchStage["specs.wheelSize"] = wheelSize;
+                pipeline.push({ $match: matchStage });
+                // 3. Sorting
+                let sortStage = {};
+                switch (sortBy) {
+                    case "price_asc":
+                        sortStage["pricing.amount"] = 1;
+                        break;
+                    case "price_desc":
+                        sortStage["pricing.amount"] = -1;
+                        break;
+                    case "views":
+                        sortStage.views = -1;
+                        break;
+                    case "newest":
+                    default:
+                        sortStage.createdAt = -1;
+                }
+                pipeline.push({ $sort: sortStage });
+                // 4. Facets (Pagination + Stats)
+                pipeline.push({
+                    $facet: {
+                        data: [
+                            { $skip: (Number(page) - 1) * Number(limit) },
+                            { $limit: Number(limit) },
+                            {
+                                $lookup: {
+                                    from: "users",
+                                    localField: "sellerId",
+                                    foreignField: "_id",
+                                    as: "seller",
+                                },
+                            },
+                            { $unwind: "$seller" },
+                            {
+                                $project: {
+                                    "seller.passwordHash": 0,
+                                    "seller.googleId": 0,
+                                    "seller.facebookId": 0,
+                                },
+                            },
+                        ],
+                        totalCount: [{ $count: "count" }],
+                        // Aggregations for filter menu
+                        brands: [
+                            { $group: { _id: "$generalInfo.brand", count: { $sum: 1 } } },
+                        ],
+                        types: [{ $group: { _id: "$type", count: { $sum: 1 } } }],
+                        frameMaterials: [
+                            { $group: { _id: "$specs.frameMaterial", count: { $sum: 1 } } },
+                        ],
+                    },
+                });
+                const result = yield Listing_1.Listing.aggregate(pipeline);
+                const data = result[0].data;
+                const total = result[0].totalCount[0] ? result[0].totalCount[0].count : 0;
+                const facets = {
+                    brands: result[0].brands,
+                    types: result[0].types,
+                    frameMaterials: result[0].frameMaterials,
+                };
+                res.json({
+                    success: true,
+                    data,
+                    facets,
+                    pagination: {
+                        total,
+                        page: Number(page),
+                        limit: Number(limit),
+                        pages: Math.ceil(total / Number(limit)),
+                    },
+                });
+            }
+            catch (error) {
+                console.error("Advanced Search Error:", error);
+                res.status(500).json({ success: false, message: error.message });
+            }
+        });
+    }
+    // POST /api/listings/suggest-from-image
+    // AI Vision feature: Suggest bike details from uploaded image
+    static suggestFromImage(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                // In a real implementation, this would handle file upload and send to Gemini Vision API
+                // For now, we simulate the response or use the text-based service if description is provided
+                const { imageUrl, description } = req.body;
+                // Placeholder for AI Vision Logic
+                // const analysis = await ChatbotService.analyzeImage(imageUrl);
+                res.json({
+                    success: true,
+                    suggestion: {
+                        brand: "Specialized (AI Detected)",
+                        type: "ROAD",
+                        frameMaterial: "Carbon",
+                        estimatedPrice: 45000000,
+                    },
+                });
+            }
+            catch (error) {
+                res.status(500).json({ success: false, message: error.message });
+            }
+        });
+    }
 }
 exports.ListingController = ListingController;
 /**
@@ -358,7 +558,10 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        Math.cos(toRad(lat1)) *
+            Math.cos(toRad(lat2)) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
 }

@@ -77,7 +77,14 @@ const UserSchema = new mongoose_1.Schema({
     kycData: {
         documentId: String,
         documentType: String,
+        frontImage: String,
+        backImage: String,
         verifiedAt: Date,
+    },
+    bodyMeasurements: {
+        height: Number, // cm
+        inseam: Number, // cm
+        weight: Number, // kg
     },
     wallet: {
         balance: { type: Number, default: 0 },
@@ -95,6 +102,8 @@ const UserSchema = new mongoose_1.Schema({
     },
     isActive: { type: Boolean, default: true },
     emailVerified: { type: Boolean, default: false },
+    resetPasswordToken: String,
+    resetPasswordExpire: Date,
 }, { timestamps: true });
 exports.User = mongoose_1.default.model("User", UserSchema);
 //# sourceMappingURL=User.js.map

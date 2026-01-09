@@ -52,25 +52,6 @@ exports.inspectionRoutes = (0, express_1.Router)();
 exports.inspectionRoutes.post("/", authMiddleware_1.protect, (0, authMiddleware_1.authorize)(User_1.UserRole.INSPECTOR), validationMiddleware_1.validationRules.submitInspection, validationMiddleware_1.validate, InspectionController_1.InspectionController.submitReport);
 /**
  * @swagger
- * /api/inspections/{orderId}:
- *   get:
- *     summary: Get inspection report for an order
- *     tags: [Inspections]
- *     parameters:
- *       - in: path
- *         name: orderId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Inspection details
- *       404:
- *         description: Not found
- */
-exports.inspectionRoutes.get("/:orderId", InspectionController_1.InspectionController.getByOrder);
-/**
- * @swagger
  * /api/inspections/checklist/{bikeType}:
  *   get:
  *     summary: Get dynamic inspection checklist based on bike type
@@ -112,6 +93,9 @@ exports.inspectionRoutes.get("/checklist/order/:orderId", InspectionController_1
  *     tags: [Inspections]
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of pending inspections
  */
 exports.inspectionRoutes.get("/pending", authMiddleware_1.protect, (0, authMiddleware_1.authorize)(User_1.UserRole.INSPECTOR), InspectionController_1.InspectionController.getPending);
 /**
@@ -122,6 +106,28 @@ exports.inspectionRoutes.get("/pending", authMiddleware_1.protect, (0, authMiddl
  *     tags: [Inspections]
  *     security:
  *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of completed inspections
  */
 exports.inspectionRoutes.get("/my-inspections", authMiddleware_1.protect, (0, authMiddleware_1.authorize)(User_1.UserRole.INSPECTOR), InspectionController_1.InspectionController.getMyInspections);
+/**
+ * @swagger
+ * /api/inspections/{orderId}:
+ *   get:
+ *     summary: Get inspection report for an order
+ *     tags: [Inspections]
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Inspection details
+ *       404:
+ *         description: Not found
+ */
+exports.inspectionRoutes.get("/:orderId", InspectionController_1.InspectionController.getByOrder);
 //# sourceMappingURL=inspectionRoutes.js.map

@@ -57,6 +57,7 @@ export interface IListing extends MongooseDocument {
   media: {
     thumbnails: string[];
     spin360Urls?: string[];
+    videoUrl?: string;
   };
   location: {
     type: string;
@@ -132,6 +133,7 @@ const ListingSchema = new Schema<IListing>(
     media: {
       thumbnails: [String],
       spin360Urls: [String],
+      videoUrl: String,
     },
 
     location: {

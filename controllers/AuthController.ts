@@ -481,4 +481,42 @@ export class AuthController {
       res.status(500).json({ success: false, message: err.message });
     }
   }
+
+  // POST /api/auth/kyc-submit
+  // Body: { documentType, documentId, frontImage, backImage }
+  static async submitKyc(req: any, res: Response) {
+    try {
+      const { documentType, documentId, frontImage, backImage } = req.body;
+      const userId = req.user.id; // From middleware
+
+      if (!documentType || !documentId || !frontImage || !backImage) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Missing KYC data" });
+      }
+
+      const user = await User.findById(userId);
+      if (!user)
+        return res.status(404).json({ success: false, message: "User not found" });
+
+      user.kycData = {
+        documentType,
+        documentId,
+        frontImage,
+        backImage,
+        verifiedAt: undefined,
+      };
+
+      // If not already verified, set to PENDING
+      if (user.kycStatus !== KycStatus.VERIFIED) {
+        user.kycStatus = KycStatus.PENDING;
+      }
+
+      await user.save();
+
+      res.json({ success: true, message: "KYC data submitted for review" });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
 }

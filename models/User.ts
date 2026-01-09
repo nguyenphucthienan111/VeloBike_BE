@@ -34,6 +34,8 @@ export interface IUser extends MongooseDocument {
   kycData?: {
     documentId?: string;
     documentType?: string;
+    frontImage?: string;
+    backImage?: string;
     verifiedAt?: Date;
   };
   bodyMeasurements?: {
@@ -91,6 +93,8 @@ const UserSchema = new Schema<IUser>(
     kycData: {
       documentId: String,
       documentType: String,
+      frontImage: String,
+      backImage: String,
       verifiedAt: Date,
     },
     bodyMeasurements: {

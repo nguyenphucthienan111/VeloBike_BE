@@ -47,6 +47,7 @@ var OrderStatus;
     OrderStatus["COMPLETED"] = "COMPLETED";
     OrderStatus["DISPUTED"] = "DISPUTED";
     OrderStatus["REFUNDED"] = "REFUNDED";
+    OrderStatus["CANCELLED"] = "CANCELLED";
 })(OrderStatus || (exports.OrderStatus = OrderStatus = {}));
 const OrderSchema = new mongoose_1.Schema({
     listingId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Listing", required: true },

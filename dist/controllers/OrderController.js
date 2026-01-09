@@ -23,22 +23,32 @@ class OrderController {
             try {
                 const buyerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
                 if (!buyerId) {
-                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                    return res
+                        .status(401)
+                        .json({ success: false, message: "Unauthorized" });
                 }
                 const { listingId, inspectionRequired = true } = req.body;
                 if (!listingId) {
-                    return res.status(400).json({ success: false, message: "listingId is required" });
+                    return res
+                        .status(400)
+                        .json({ success: false, message: "listingId is required" });
                 }
                 // Check if listing exists and is available
                 const listing = yield Listing_1.Listing.findById(listingId);
                 if (!listing) {
-                    return res.status(404).json({ success: false, message: "Listing not found" });
+                    return res
+                        .status(404)
+                        .json({ success: false, message: "Listing not found" });
                 }
                 if (listing.status === "SOLD") {
-                    return res.status(400).json({ success: false, message: "This item is already sold" });
+                    return res
+                        .status(400)
+                        .json({ success: false, message: "This item is already sold" });
                 }
                 if (listing.sellerId.toString() === buyerId) {
-                    return res.status(400).json({ success: false, message: "Cannot buy your own listing" });
+                    return res
+                        .status(400)
+                        .json({ success: false, message: "Cannot buy your own listing" });
                 }
                 // Create order using OrderService
                 const order = yield OrderService_1.OrderService.createOrder(listingId, buyerId, inspectionRequired);
@@ -68,7 +78,9 @@ class OrderController {
                     .populate("sellerId", "fullName email phone")
                     .populate("inspectorId", "fullName");
                 if (!order) {
-                    return res.status(404).json({ success: false, message: "Order not found" });
+                    return res
+                        .status(404)
+                        .json({ success: false, message: "Order not found" });
                 }
                 // Check authorization: Buyer, Seller, Inspector, or Admin can view
                 const isAuthorized = userRole === User_1.UserRole.ADMIN ||
@@ -76,7 +88,12 @@ class OrderController {
                     order.sellerId.toString() === userId ||
                     (order.inspectorId && order.inspectorId.toString() === userId);
                 if (!isAuthorized) {
-                    return res.status(403).json({ success: false, message: "Not authorized to view this order" });
+                    return res
+                        .status(403)
+                        .json({
+                        success: false,
+                        message: "Not authorized to view this order",
+                    });
                 }
                 res.json({ success: true, data: order });
             }
@@ -93,7 +110,9 @@ class OrderController {
             try {
                 const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
                 if (!userId) {
-                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                    return res
+                        .status(401)
+                        .json({ success: false, message: "Unauthorized" });
                 }
                 const { status, role, page = 1, limit = 20 } = req.query;
                 // Build query based on role
@@ -145,14 +164,18 @@ class OrderController {
                 const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
                 const order = yield Order_1.Order.findById(id);
                 if (!order) {
-                    return res.status(404).json({ success: false, message: "Order not found" });
+                    return res
+                        .status(404)
+                        .json({ success: false, message: "Order not found" });
                 }
                 // Check authorization
                 const isAuthorized = order.buyerId.toString() === userId ||
                     order.sellerId.toString() === userId ||
                     ((_b = req.user) === null || _b === void 0 ? void 0 : _b.role) === User_1.UserRole.ADMIN;
                 if (!isAuthorized) {
-                    return res.status(403).json({ success: false, message: "Not authorized" });
+                    return res
+                        .status(403)
+                        .json({ success: false, message: "Not authorized" });
                 }
                 const timeline = yield OrderService_1.OrderService.getOrderTimeline(id);
                 res.json({ success: true, data: timeline });
@@ -174,20 +197,39 @@ class OrderController {
                 const userRole = (_b = req.user) === null || _b === void 0 ? void 0 : _b.role;
                 const order = yield Order_1.Order.findById(id);
                 if (!order) {
-                    return res.status(404).json({ success: false, message: "Order not found" });
+                    return res
+                        .status(404)
+                        .json({ success: false, message: "Order not found" });
                 }
                 // Check authorization and validate status transitions
                 let allowedStatuses = [];
-                if (userRole === User_1.UserRole.SELLER && order.sellerId.toString() === userId) {
+                if (userRole === User_1.UserRole.SELLER &&
+                    order.sellerId.toString() === userId) {
                     // Seller can mark as SHIPPING
-                    if (status === Order_1.OrderStatus.SHIPPING && order.status === Order_1.OrderStatus.INSPECTION_PASSED) {
+                    if (status === Order_1.OrderStatus.SHIPPING &&
+                        order.status === Order_1.OrderStatus.INSPECTION_PASSED) {
                         allowedStatuses = [Order_1.OrderStatus.SHIPPING];
                     }
                 }
-                else if (userRole === User_1.UserRole.BUYER && order.buyerId.toString() === userId) {
+                else if (userRole === User_1.UserRole.BUYER &&
+                    order.buyerId.toString() === userId) {
                     // Buyer can mark as DELIVERED
-                    if (status === Order_1.OrderStatus.DELIVERED && order.status === Order_1.OrderStatus.SHIPPING) {
+                    if (status === Order_1.OrderStatus.DELIVERED &&
+                        order.status === Order_1.OrderStatus.SHIPPING) {
                         allowedStatuses = [Order_1.OrderStatus.DELIVERED];
+                    }
+                    // Buyer can CANCEL if created
+                    if (status === Order_1.OrderStatus.CANCELLED &&
+                        order.status === Order_1.OrderStatus.CREATED) {
+                        allowedStatuses = [Order_1.OrderStatus.CANCELLED];
+                    }
+                }
+                else if (userRole === User_1.UserRole.SELLER &&
+                    order.sellerId.toString() === userId) {
+                    // Seller can CANCEL (Reject) if created
+                    if (status === Order_1.OrderStatus.CANCELLED &&
+                        order.status === Order_1.OrderStatus.CREATED) {
+                        allowedStatuses = [Order_1.OrderStatus.CANCELLED];
                     }
                 }
                 else if (userRole === User_1.UserRole.ADMIN) {

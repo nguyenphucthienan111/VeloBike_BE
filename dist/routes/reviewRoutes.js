@@ -23,7 +23,6 @@ exports.reviewRoutes = (0, express_1.Router)();
  *               - orderId
  *               - rating
  *               - comment
- *               - type
  *             properties:
  *               orderId:
  *                 type: string
@@ -33,28 +32,14 @@ exports.reviewRoutes = (0, express_1.Router)();
  *                 maximum: 5
  *               comment:
  *                 type: string
- *               categories:
- *                 type: object
- *                 properties:
- *                   itemAccuracy:
- *                     type: number
- *                   communication:
- *                     type: number
- *                   shipping:
- *                     type: number
- *                   packaging:
- *                     type: number
- *               type:
- *                 type: string
- *                 enum: [SELLER, BUYER]
  *     responses:
  *       201:
  *         description: Review created successfully
  */
-exports.reviewRoutes.post("/", ReviewController_1.ReviewController.createReview);
+exports.reviewRoutes.post("/", authMiddleware_1.protect, ReviewController_1.ReviewController.createReview);
 /**
  * @swagger
- * /api/reviews/user/{userId}:
+ * /api/reviews/{userId}:
  *   get:
  *     summary: Get reviews for a user
  *     tags: [Reviews]
@@ -64,11 +49,6 @@ exports.reviewRoutes.post("/", ReviewController_1.ReviewController.createReview)
  *         required: true
  *         schema:
  *           type: string
- *       - in: query
- *         name: type
- *         schema:
- *           type: string
- *           enum: [SELLER, BUYER]
  *       - in: query
  *         name: page
  *         schema:
@@ -81,68 +61,5 @@ exports.reviewRoutes.post("/", ReviewController_1.ReviewController.createReview)
  *       200:
  *         description: Reviews list
  */
-exports.reviewRoutes.get("/user/:userId", ReviewController_1.ReviewController.getUserReviews);
-/**
- * @swagger
- * /api/reviews/seller/{sellerId}/summary:
- *   get:
- *     summary: Get seller review summary
- *     tags: [Reviews]
- *     parameters:
- *       - in: path
- *         name: sellerId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Seller review summary
- */
-exports.reviewRoutes.get("/seller/:sellerId/summary", ReviewController_1.ReviewController.getSellerSummary);
-/**
- * @swagger
- * /api/reviews/order/{orderId}:
- *   get:
- *     summary: Get reviews for an order
- *     tags: [Reviews]
- *     parameters:
- *       - in: path
- *         name: orderId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Order reviews
- */
-exports.reviewRoutes.get("/order/:orderId", ReviewController_1.ReviewController.getOrderReviews);
-/**
- * @swagger
- * /api/reviews/{reviewId}:
- *   delete:
- *     summary: Delete review (owner only)
- *     tags: [Reviews]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: reviewId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Review deleted
- */
-exports.reviewRoutes.delete("/:reviewId", authMiddleware_1.protect, ReviewController_1.ReviewController.deleteReview);
-/**
- * @swagger
- * /api/reviews/my-reviews:
- *   get:
- *     summary: Get my reviews (reviews I wrote)
- *     tags: [Reviews]
- *     security:
- *       - bearerAuth: []
- */
-exports.reviewRoutes.get("/my-reviews", authMiddleware_1.protect, ReviewController_1.ReviewController.getMyReviews);
+exports.reviewRoutes.get("/:userId", ReviewController_1.ReviewController.getUserReviews);
 //# sourceMappingURL=reviewRoutes.js.map

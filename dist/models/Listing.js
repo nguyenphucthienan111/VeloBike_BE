@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TriathlonListing = exports.MtbListing = exports.RoadListing = exports.Listing = exports.ListingStatus = exports.BikeType = void 0;
+exports.TriathlonListing = exports.EBikeListing = exports.MtbListing = exports.RoadListing = exports.Listing = exports.ListingStatus = exports.BikeType = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 // 1. Base Interfaces & Enums
 var BikeType;
@@ -42,6 +42,7 @@ var BikeType;
     BikeType["MTB"] = "MTB";
     BikeType["GRAVEL"] = "GRAVEL";
     BikeType["TRIATHLON"] = "TRIATHLON";
+    BikeType["E_BIKE"] = "E_BIKE";
 })(BikeType || (exports.BikeType = BikeType = {}));
 var ListingStatus;
 (function (ListingStatus) {
@@ -106,6 +107,7 @@ const ListingSchema = new mongoose_1.Schema({
     media: {
         thumbnails: [String],
         spin360Urls: [String],
+        videoUrl: String,
     },
     location: {
         type: { type: String, enum: ["Point"], default: "Point" },
@@ -146,8 +148,20 @@ const MtbSchema = new mongoose_1.Schema({
         wheelSize: { type: String, enum: ["27.5", "29", "Mullet"] },
     },
 });
+// --- E-BIKE ---
+const EBikeSchema = new mongoose_1.Schema({
+    specs: {
+        frameMaterial: String,
+        motor: String, // e.g., Bosch Performance Line CX
+        battery: String, // e.g., 625Wh
+        range: String, // e.g., 80km
+        maxSpeed: String, // e.g., 25km/h
+        odometer: Number, // Total km ridden
+    },
+});
 // 5. Apply Discriminators
 exports.RoadListing = exports.Listing.discriminator(BikeType.ROAD, RoadBikeSchema);
 exports.MtbListing = exports.Listing.discriminator(BikeType.MTB, MtbSchema);
+exports.EBikeListing = exports.Listing.discriminator(BikeType.E_BIKE, EBikeSchema);
 exports.TriathlonListing = exports.Listing.discriminator(BikeType.TRIATHLON, RoadBikeSchema); // Shares structure with Road for now
 //# sourceMappingURL=Listing.js.map

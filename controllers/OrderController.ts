@@ -12,31 +12,45 @@ export class OrderController {
     try {
       const buyerId = req.user?.id;
       if (!buyerId) {
-        return res.status(401).json({ success: false, message: "Unauthorized" });
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
       }
 
       const { listingId, inspectionRequired = true } = req.body;
 
       if (!listingId) {
-        return res.status(400).json({ success: false, message: "listingId is required" });
+        return res
+          .status(400)
+          .json({ success: false, message: "listingId is required" });
       }
 
       // Check if listing exists and is available
       const listing = await Listing.findById(listingId);
       if (!listing) {
-        return res.status(404).json({ success: false, message: "Listing not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Listing not found" });
       }
 
       if (listing.status === "SOLD") {
-        return res.status(400).json({ success: false, message: "This item is already sold" });
+        return res
+          .status(400)
+          .json({ success: false, message: "This item is already sold" });
       }
 
       if (listing.sellerId.toString() === buyerId) {
-        return res.status(400).json({ success: false, message: "Cannot buy your own listing" });
+        return res
+          .status(400)
+          .json({ success: false, message: "Cannot buy your own listing" });
       }
 
       // Create order using OrderService
-      const order = await OrderService.createOrder(listingId, buyerId, inspectionRequired);
+      const order = await OrderService.createOrder(
+        listingId,
+        buyerId,
+        inspectionRequired
+      );
 
       res.status(201).json({
         success: true,
@@ -63,7 +77,9 @@ export class OrderController {
         .populate("inspectorId", "fullName");
 
       if (!order) {
-        return res.status(404).json({ success: false, message: "Order not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Order not found" });
       }
 
       // Check authorization: Buyer, Seller, Inspector, or Admin can view
@@ -74,7 +90,12 @@ export class OrderController {
         (order.inspectorId && order.inspectorId.toString() === userId);
 
       if (!isAuthorized) {
-        return res.status(403).json({ success: false, message: "Not authorized to view this order" });
+        return res
+          .status(403)
+          .json({
+            success: false,
+            message: "Not authorized to view this order",
+          });
       }
 
       res.json({ success: true, data: order });
@@ -89,7 +110,9 @@ export class OrderController {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({ success: false, message: "Unauthorized" });
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
       }
 
       const { status, role, page = 1, limit = 20 } = req.query;
@@ -143,7 +166,9 @@ export class OrderController {
 
       const order = await Order.findById(id);
       if (!order) {
-        return res.status(404).json({ success: false, message: "Order not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Order not found" });
       }
 
       // Check authorization
@@ -153,7 +178,9 @@ export class OrderController {
         req.user?.role === UserRole.ADMIN;
 
       if (!isAuthorized) {
-        return res.status(403).json({ success: false, message: "Not authorized" });
+        return res
+          .status(403)
+          .json({ success: false, message: "Not authorized" });
       }
 
       const timeline = await OrderService.getOrderTimeline(id);
@@ -175,21 +202,53 @@ export class OrderController {
 
       const order = await Order.findById(id);
       if (!order) {
-        return res.status(404).json({ success: false, message: "Order not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Order not found" });
       }
 
       // Check authorization and validate status transitions
       let allowedStatuses: OrderStatus[] = [];
 
-      if (userRole === UserRole.SELLER && order.sellerId.toString() === userId) {
+      if (
+        userRole === UserRole.SELLER &&
+        order.sellerId.toString() === userId
+      ) {
         // Seller can mark as SHIPPING
-        if (status === OrderStatus.SHIPPING && order.status === OrderStatus.INSPECTION_PASSED) {
+        if (
+          status === OrderStatus.SHIPPING &&
+          order.status === OrderStatus.INSPECTION_PASSED
+        ) {
           allowedStatuses = [OrderStatus.SHIPPING];
         }
-      } else if (userRole === UserRole.BUYER && order.buyerId.toString() === userId) {
+      } else if (
+        userRole === UserRole.BUYER &&
+        order.buyerId.toString() === userId
+      ) {
         // Buyer can mark as DELIVERED
-        if (status === OrderStatus.DELIVERED && order.status === OrderStatus.SHIPPING) {
+        if (
+          status === OrderStatus.DELIVERED &&
+          order.status === OrderStatus.SHIPPING
+        ) {
           allowedStatuses = [OrderStatus.DELIVERED];
+        }
+        // Buyer can CANCEL if created
+        if (
+          status === OrderStatus.CANCELLED &&
+          order.status === OrderStatus.CREATED
+        ) {
+          allowedStatuses = [OrderStatus.CANCELLED];
+        }
+      } else if (
+        userRole === UserRole.SELLER &&
+        order.sellerId.toString() === userId
+      ) {
+        // Seller can CANCEL (Reject) if created
+        if (
+          status === OrderStatus.CANCELLED &&
+          order.status === OrderStatus.CREATED
+        ) {
+          allowedStatuses = [OrderStatus.CANCELLED];
         }
       } else if (userRole === UserRole.ADMIN) {
         // Admin can do more
@@ -204,7 +263,13 @@ export class OrderController {
       }
 
       const orderService = new OrderService();
-      const updatedOrder = await orderService.transitionState(id, status as OrderStatus, userId, userRole, note);
+      const updatedOrder = await orderService.transitionState(
+        id,
+        status as OrderStatus,
+        userId,
+        userRole,
+        note
+      );
 
       res.json({ success: true, data: updatedOrder });
     } catch (error: any) {
@@ -212,4 +277,3 @@ export class OrderController {
     }
   }
 }
-

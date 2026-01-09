@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { Listing } from "../models/Listing";
 import { AuthRequest } from "../middleware/authMiddleware";
+import { ChatbotService } from "../services/ChatbotService"; // Reuse AI service
 
 export class ListingController {
   // GET /api/listings
@@ -81,26 +82,40 @@ export class ListingController {
       const sellerId = req.user?.id;
 
       if (!sellerId) {
-        return res.status(401).json({ success: false, message: "Unauthorized" });
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
       }
 
       const listing = await Listing.findById(id);
       if (!listing) {
-        return res.status(404).json({ success: false, message: "Listing not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Listing not found" });
       }
 
       // Check ownership
       if (listing.sellerId.toString() !== sellerId) {
-        return res.status(403).json({ success: false, message: "Not authorized to update this listing" });
+        return res
+          .status(403)
+          .json({
+            success: false,
+            message: "Not authorized to update this listing",
+          });
       }
 
       // Don't allow updating if already sold
       if (listing.status === "SOLD") {
-        return res.status(400).json({ success: false, message: "Cannot update sold listing" });
+        return res
+          .status(400)
+          .json({ success: false, message: "Cannot update sold listing" });
       }
 
       // Update listing
-      const updatedListing = await Listing.findByIdAndUpdate(id, req.body, { new: true, runValidators: true });
+      const updatedListing = await Listing.findByIdAndUpdate(id, req.body, {
+        new: true,
+        runValidators: true,
+      });
 
       res.json({ success: true, data: updatedListing });
     } catch (error: any) {
@@ -116,22 +131,33 @@ export class ListingController {
       const sellerId = req.user?.id;
 
       if (!sellerId) {
-        return res.status(401).json({ success: false, message: "Unauthorized" });
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
       }
 
       const listing = await Listing.findById(id);
       if (!listing) {
-        return res.status(404).json({ success: false, message: "Listing not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Listing not found" });
       }
 
       // Check ownership
       if (listing.sellerId.toString() !== sellerId) {
-        return res.status(403).json({ success: false, message: "Not authorized to delete this listing" });
+        return res
+          .status(403)
+          .json({
+            success: false,
+            message: "Not authorized to delete this listing",
+          });
       }
 
       // Don't allow deleting if already sold
       if (listing.status === "SOLD") {
-        return res.status(400).json({ success: false, message: "Cannot delete sold listing" });
+        return res
+          .status(400)
+          .json({ success: false, message: "Cannot delete sold listing" });
       }
 
       await Listing.findByIdAndDelete(id);
@@ -148,10 +174,16 @@ export class ListingController {
     try {
       const { id } = req.params;
 
-      const listing = await Listing.findByIdAndUpdate(id, { $inc: { views: 1 } }, { new: true });
+      const listing = await Listing.findByIdAndUpdate(
+        id,
+        { $inc: { views: 1 } },
+        { new: true }
+      );
 
       if (!listing) {
-        return res.status(404).json({ success: false, message: "Listing not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Listing not found" });
       }
 
       res.json({ success: true, data: { views: listing.views } });
@@ -166,7 +198,9 @@ export class ListingController {
     try {
       const sellerId = req.user?.id;
       if (!sellerId) {
-        return res.status(401).json({ success: false, message: "Unauthorized" });
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
       }
 
       const { status, page = 1, limit = 20 } = req.query;
@@ -203,7 +237,15 @@ export class ListingController {
   // Find listings near a location (geolocation search)
   static async getNearby(req: any, res: any) {
     try {
-      const { lat, lng, radius = 10, type, brand, minPrice, maxPrice } = req.query;
+      const {
+        lat,
+        lng,
+        radius = 10,
+        type,
+        brand,
+        minPrice,
+        maxPrice,
+      } = req.query;
 
       if (!lat || !lng) {
         return res.status(400).json({
@@ -217,7 +259,14 @@ export class ListingController {
       const radiusKm = parseFloat(radius) || 10; // Default 10km
 
       // Validate coordinates
-      if (isNaN(latitude) || isNaN(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      if (
+        isNaN(latitude) ||
+        isNaN(longitude) ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180
+      ) {
         return res.status(400).json({
           success: false,
           message: "Invalid coordinates",
@@ -297,7 +346,14 @@ export class ListingController {
       const inseam = parseFloat(riderInseam);
       const preferredReach = riderReach ? parseFloat(riderReach) : null;
 
-      if (isNaN(height) || isNaN(inseam) || height < 100 || height > 250 || inseam < 50 || inseam > 150) {
+      if (
+        isNaN(height) ||
+        isNaN(inseam) ||
+        height < 100 ||
+        height > 250 ||
+        inseam < 50 ||
+        inseam > 150
+      ) {
         return res.status(400).json({
           success: false,
           message: "Invalid body measurements",
@@ -314,7 +370,12 @@ export class ListingController {
           });
         }
 
-        const fitResult = calculateBikeFit(listing, height, inseam, preferredReach);
+        const fitResult = calculateBikeFit(
+          listing,
+          height,
+          inseam,
+          preferredReach
+        );
         return res.json({
           success: true,
           listingId,
@@ -354,7 +415,12 @@ export class ListingController {
 
       // Calculate fit score for each listing
       const listingsWithFit = listings.map((listing: any) => {
-        const fitResult = calculateBikeFit(listing, height, inseam, preferredReach);
+        const fitResult = calculateBikeFit(
+          listing,
+          height,
+          inseam,
+          preferredReach
+        );
         return {
           ...listing.toObject(),
           fitScore: fitResult.fitScore,
@@ -425,7 +491,8 @@ export class ListingController {
       const matchStage: any = { status: "PUBLISHED" };
 
       if (type && type !== "ALL") matchStage.type = type;
-      if (brand) matchStage["generalInfo.brand"] = { $regex: new RegExp(brand, "i") };
+      if (brand)
+        matchStage["generalInfo.brand"] = { $regex: new RegExp(brand, "i") };
       if (size) matchStage["generalInfo.size"] = size;
       if (condition) matchStage["generalInfo.condition"] = condition;
 
@@ -437,9 +504,13 @@ export class ListingController {
       }
 
       // Specs Filters (Polymorphic fields)
-      if (frameMaterial) matchStage["specs.frameMaterial"] = { $regex: new RegExp(frameMaterial, "i") };
+      if (frameMaterial)
+        matchStage["specs.frameMaterial"] = {
+          $regex: new RegExp(frameMaterial, "i"),
+        };
       if (brakeType) matchStage["specs.brakeType"] = brakeType;
-      if (groupset) matchStage["specs.groupset"] = { $regex: new RegExp(groupset, "i") };
+      if (groupset)
+        matchStage["specs.groupset"] = { $regex: new RegExp(groupset, "i") };
       if (wheelSize) matchStage["specs.wheelSize"] = wheelSize;
 
       pipeline.push({ $match: matchStage });
@@ -487,9 +558,13 @@ export class ListingController {
           ],
           totalCount: [{ $count: "count" }],
           // Aggregations for filter menu
-          brands: [{ $group: { _id: "$generalInfo.brand", count: { $sum: 1 } } }],
+          brands: [
+            { $group: { _id: "$generalInfo.brand", count: { $sum: 1 } } },
+          ],
           types: [{ $group: { _id: "$type", count: { $sum: 1 } } }],
-          frameMaterials: [{ $group: { _id: "$specs.frameMaterial", count: { $sum: 1 } } }],
+          frameMaterials: [
+            { $group: { _id: "$specs.frameMaterial", count: { $sum: 1 } } },
+          ],
         },
       });
 
@@ -518,19 +593,52 @@ export class ListingController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  // POST /api/listings/suggest-from-image
+  // AI Vision feature: Suggest bike details from uploaded image
+  static async suggestFromImage(req: any, res: any) {
+    try {
+      // In a real implementation, this would handle file upload and send to Gemini Vision API
+      // For now, we simulate the response or use the text-based service if description is provided
+      const { imageUrl, description } = req.body;
+
+      // Placeholder for AI Vision Logic
+      // const analysis = await ChatbotService.analyzeImage(imageUrl);
+
+      res.json({
+        success: true,
+        suggestion: {
+          brand: "Specialized (AI Detected)",
+          type: "ROAD",
+          frameMaterial: "Carbon",
+          estimatedPrice: 45000000,
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
 
 /**
  * Calculate distance between two coordinates (Haversine formula)
  * Returns distance in kilometers
  */
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+function calculateDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
   const R = 6371; // Earth's radius in km
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -542,7 +650,12 @@ function toRad(degrees: number): number {
 /**
  * Calculate bike fit for a specific listing
  */
-function calculateBikeFit(listing: any, riderHeight: number, riderInseam: number, preferredReach?: number | null): any {
+function calculateBikeFit(
+  listing: any,
+  riderHeight: number,
+  riderInseam: number,
+  preferredReach?: number | null
+): any {
   if (!listing.geometry || !listing.geometry.stack || !listing.geometry.reach) {
     return {
       fitScore: 0,

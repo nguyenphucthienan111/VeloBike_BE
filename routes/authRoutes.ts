@@ -262,3 +262,38 @@ authRoutes.post("/forgot-password", AuthController.forgotPassword as any);
  *         description: Invalid OTP
  */
 authRoutes.post("/reset-password", AuthController.resetPassword as any);
+
+/**
+ * @swagger
+ * /api/auth/kyc-submit:
+ *   post:
+ *     summary: Submit KYC documents (Seller only)
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - documentType
+ *               - documentId
+ *               - frontImage
+ *               - backImage
+ *             properties:
+ *               documentType:
+ *                 type: string
+ *                 enum: [CCCD, CMND, PASSPORT]
+ *               documentId:
+ *                 type: string
+ *               frontImage:
+ *                 type: string
+ *               backImage:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: KYC submitted
+ */
+authRoutes.post("/kyc-submit", protect, AuthController.submitKyc as any);

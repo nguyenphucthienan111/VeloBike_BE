@@ -145,4 +145,149 @@ exports.authRoutes.post("/login", validationMiddleware_1.validationRules.login, 
  *                   $ref: '#/components/schemas/User'
  */
 exports.authRoutes.post("/google", AuthController_1.AuthController.googleLogin);
+/**
+ * @swagger
+ * /api/auth/facebook:
+ *   post:
+ *     summary: Log in or Register using Facebook Access Token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - facebookToken
+ *               - userID
+ *             properties:
+ *               facebookToken:
+ *                 type: string
+ *               userID:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login/Register successful
+ */
+exports.authRoutes.post("/facebook", AuthController_1.AuthController.facebookLogin);
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   post:
+ *     summary: Change user password
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password updated
+ *       400:
+ *         description: Incorrect current password
+ */
+// Import protect middleware locally to avoid circular dependency issues if any,
+// or better, just import it at top if not present.
+const authMiddleware_1 = require("../middleware/authMiddleware");
+exports.authRoutes.post("/change-password", authMiddleware_1.protect, AuthController_1.AuthController.changePassword);
+/**
+ * @swagger
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Request password reset OTP
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP sent to email
+ *       404:
+ *         description: User not found
+ */
+exports.authRoutes.post("/forgot-password", AuthController_1.AuthController.forgotPassword);
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset password using OTP
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *               - newPassword
+ *             properties:
+ *               email:
+ *                 type: string
+ *               code:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ *       400:
+ *         description: Invalid OTP
+ */
+exports.authRoutes.post("/reset-password", AuthController_1.AuthController.resetPassword);
+/**
+ * @swagger
+ * /api/auth/kyc-submit:
+ *   post:
+ *     summary: Submit KYC documents (Seller only)
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - documentType
+ *               - documentId
+ *               - frontImage
+ *               - backImage
+ *             properties:
+ *               documentType:
+ *                 type: string
+ *                 enum: [CCCD, CMND, PASSPORT]
+ *               documentId:
+ *                 type: string
+ *               frontImage:
+ *                 type: string
+ *               backImage:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: KYC submitted
+ */
+exports.authRoutes.post("/kyc-submit", authMiddleware_1.protect, AuthController_1.AuthController.submitKyc);
 //# sourceMappingURL=authRoutes.js.map

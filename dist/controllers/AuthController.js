@@ -236,6 +236,63 @@ class AuthController {
             }
         });
     }
+    // POST /api/auth/facebook
+    // Verify Facebook Access Token and create/link user
+    // Note: In production, verify token via Graph API: https://graph.facebook.com/me?access_token=...
+    static facebookLogin(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { facebookToken, userID } = req.body;
+                if (!facebookToken || !userID)
+                    return res
+                        .status(400)
+                        .json({ success: false, message: "facebookToken and userID are required" });
+                // Mock verification (Replace with real Graph API call)
+                // const response = await axios.get(`https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${facebookToken}`);
+                // const { id, name, email, picture } = response.data;
+                // Simulated data for demo/stub
+                const email = `fb_${userID}@velobike.local`; // Fallback if FB doesn't return email
+                const name = "Facebook User";
+                const picture = `https://graph.facebook.com/${userID}/picture?type=large`;
+                let user = yield User_1.User.findOne({ facebookId: userID });
+                if (!user) {
+                    // Try to link by email if exists
+                    user = yield User_1.User.findOne({ email });
+                    if (user) {
+                        user.facebookId = userID;
+                        yield user.save();
+                    }
+                    else {
+                        user = new User_1.User({
+                            email,
+                            fullName: name,
+                            facebookId: userID,
+                            avatar: picture,
+                            role: User_1.UserRole.BUYER,
+                            kycStatus: User_1.KycStatus.PENDING,
+                            emailVerified: true,
+                        });
+                        yield user.save();
+                    }
+                }
+                const token = generateToken(user);
+                res.json({
+                    success: true,
+                    token,
+                    user: {
+                        id: user._id,
+                        email: user.email,
+                        fullName: user.fullName,
+                        role: user.role,
+                    },
+                });
+            }
+            catch (err) {
+                console.error("Facebook login error:", err.message);
+                res.status(500).json({ success: false, message: err.message });
+            }
+        });
+    }
     // POST /api/auth/send-otp
     // Body: { phone }
     static sendOtp(req, res) {
@@ -303,6 +360,122 @@ class AuthController {
                         phone: user.phone,
                     },
                 });
+            }
+            catch (err) {
+                res.status(500).json({ success: false, message: err.message });
+            }
+        });
+    }
+    // POST /api/auth/change-password
+    // Body: { currentPassword, newPassword }
+    // Requires Authentication Middleware
+    static changePassword(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { currentPassword, newPassword } = req.body;
+                const userId = req.user.id;
+                if (!currentPassword || !newPassword) {
+                    return res.status(400).json({ success: false, message: "Missing passwords" });
+                }
+                const user = yield User_1.User.findById(userId);
+                if (!user || !user.passwordHash) {
+                    return res.status(404).json({ success: false, message: "User not found" });
+                }
+                const isMatch = yield bcryptjs_1.default.compare(currentPassword, user.passwordHash);
+                if (!isMatch) {
+                    return res.status(400).json({ success: false, message: "Incorrect current password" });
+                }
+                const salt = yield bcryptjs_1.default.genSalt(10);
+                user.passwordHash = yield bcryptjs_1.default.hash(newPassword, salt);
+                yield user.save();
+                res.json({ success: true, message: "Password updated successfully" });
+            }
+            catch (err) {
+                res.status(500).json({ success: false, message: err.message });
+            }
+        });
+    }
+    // POST /api/auth/forgot-password
+    // Body: { email }
+    static forgotPassword(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { email } = req.body;
+                if (!email)
+                    return res.status(400).json({ success: false, message: "Email required" });
+                const user = yield User_1.User.findOne({ email });
+                if (!user)
+                    return res.status(404).json({ success: false, message: "User not found" });
+                // Generate OTP
+                const code = Math.floor(100000 + Math.random() * 900000).toString();
+                const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+                yield Otp_1.Otp.findOneAndUpdate({ identifier: `reset:${email}` }, { code, expiresAt }, { upsert: true, new: true });
+                // Send Email
+                const subject = "VeloBike - Password Reset OTP";
+                const html = `<p>Your password reset code is: <strong>${code}</strong></p>`;
+                yield EmailService_1.EmailService.sendEmail({ to: email, subject, html });
+                res.json({ success: true, message: "Reset OTP sent to email" });
+            }
+            catch (err) {
+                res.status(500).json({ success: false, message: err.message });
+            }
+        });
+    }
+    // POST /api/auth/reset-password
+    // Body: { email, code, newPassword }
+    static resetPassword(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { email, code, newPassword } = req.body;
+                if (!email || !code || !newPassword) {
+                    return res.status(400).json({ success: false, message: "Missing fields" });
+                }
+                const record = yield Otp_1.Otp.findOne({ identifier: `reset:${email}` });
+                if (!record || record.code !== code || new Date() > record.expiresAt) {
+                    return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+                }
+                const user = yield User_1.User.findOne({ email });
+                if (!user)
+                    return res.status(404).json({ success: false, message: "User not found" });
+                const salt = yield bcryptjs_1.default.genSalt(10);
+                user.passwordHash = yield bcryptjs_1.default.hash(newPassword, salt);
+                yield user.save();
+                yield Otp_1.Otp.deleteOne({ _id: record._id });
+                res.json({ success: true, message: "Password reset successfully" });
+            }
+            catch (err) {
+                res.status(500).json({ success: false, message: err.message });
+            }
+        });
+    }
+    // POST /api/auth/kyc-submit
+    // Body: { documentType, documentId, frontImage, backImage }
+    static submitKyc(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { documentType, documentId, frontImage, backImage } = req.body;
+                const userId = req.user.id; // From middleware
+                if (!documentType || !documentId || !frontImage || !backImage) {
+                    return res
+                        .status(400)
+                        .json({ success: false, message: "Missing KYC data" });
+                }
+                const user = yield User_1.User.findById(userId);
+                if (!user)
+                    return res.status(404).json({ success: false, message: "User not found" });
+                user.kycData = {
+                    documentType,
+                    documentId,
+                    frontImage,
+                    backImage,
+                    verifiedAt: undefined,
+                };
+                // If not already verified, set to PENDING
+                if (user.kycStatus !== User_1.KycStatus.VERIFIED) {
+                    user.kycStatus = User_1.KycStatus.PENDING;
+                }
+                yield user.save();
+                res.json({ success: true, message: "KYC data submitted for review" });
             }
             catch (err) {
                 res.status(500).json({ success: false, message: err.message });

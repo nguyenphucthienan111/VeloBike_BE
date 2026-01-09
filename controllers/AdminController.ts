@@ -347,7 +347,6 @@ export class AdminController {
   static async releasePayout(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { PaymentService } = await import("../services/PaymentService");
       const { OrderService } = await import("../services/OrderService");
 
       const order = await Order.findById(id).populate("sellerId");
@@ -362,10 +361,7 @@ export class AdminController {
         });
       }
 
-      // Release payment to seller
-      await PaymentService.releasePayment(id, order.sellerId.toString());
-
-      // Complete the order
+      // Complete the order (handles wallet update and status transition)
       await OrderService.completeOrder(id, (req as any).user.id);
 
       res.status(200).json({

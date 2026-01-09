@@ -374,7 +374,6 @@ class AdminController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { id } = req.params;
-                const { PaymentService } = yield Promise.resolve().then(() => __importStar(require("../services/PaymentService")));
                 const { OrderService } = yield Promise.resolve().then(() => __importStar(require("../services/OrderService")));
                 const order = yield Order_1.Order.findById(id).populate("sellerId");
                 if (!order) {
@@ -386,9 +385,7 @@ class AdminController {
                         message: "Order must be in DELIVERED status to release payout",
                     });
                 }
-                // Release payment to seller
-                yield PaymentService.releasePayment(id, order.sellerId.toString());
-                // Complete the order
+                // Complete the order (handles wallet update and status transition)
                 yield OrderService.completeOrder(id, req.user.id);
                 res.status(200).json({
                     success: true,

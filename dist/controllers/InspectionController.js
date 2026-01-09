@@ -324,6 +324,34 @@ function getChecklistByBikeType(bikeType) {
                     description: "Kiểm tra tư thế aero",
                 },
             ];
+        case Listing_1.BikeType.E_BIKE:
+            return [
+                ...baseChecklist,
+                {
+                    component: "Motor Function",
+                    category: "ELECTRONICS",
+                    required: true,
+                    description: "Kiểm tra hoạt động của motor",
+                },
+                {
+                    component: "Battery Health",
+                    category: "ELECTRONICS",
+                    required: true,
+                    description: "Kiểm tra tình trạng pin và số chu kỳ sạc",
+                },
+                {
+                    component: "Display/Controller",
+                    category: "ELECTRONICS",
+                    required: true,
+                    description: "Kiểm tra màn hình và bộ điều khiển",
+                },
+                {
+                    component: "Charger",
+                    category: "ACCESSORIES",
+                    required: true,
+                    description: "Kiểm tra sạc pin",
+                },
+            ];
         default:
             return baseChecklist;
     }
@@ -350,9 +378,7 @@ class InspectionController {
                     return;
                 }
                 if (order.status !== Order_1.OrderStatus.IN_INSPECTION) {
-                    res
-                        .status(400)
-                        .json({
+                    res.status(400).json({
                         success: false,
                         message: "Order is not in inspection phase",
                     });
@@ -365,6 +391,12 @@ class InspectionController {
                 }
                 // 3. Auto-determine verdict if not provided or if score suggests different verdict
                 let finalVerdict = overallVerdict;
+                // LOGIC FIX: Check for CRITICAL failures
+                // Nếu có bất kỳ lỗi CRITICAL nào, verdict bắt buộc phải là FAILED
+                const hasCriticalFail = checkpoints.some((cp) => cp.status === "FAIL" && cp.severity === "CRITICAL");
+                if (hasCriticalFail) {
+                    finalVerdict = "FAILED";
+                }
                 if (!finalVerdict) {
                     if (finalScore >= 7) {
                         finalVerdict = "PASSED";
@@ -386,6 +418,15 @@ class InspectionController {
                     inspectorNote,
                 });
                 yield newInspection.save();
+                // UPDATE LISTING: Sync inspection result to the Listing
+                // This fulfills the requirement: "Gắn nhãn Xe đã kiểm định"
+                if (finalVerdict === "PASSED" || finalVerdict === "SUGGEST_ADJUSTMENT") {
+                    yield Listing_1.Listing.findByIdAndUpdate(order.listingId, {
+                        inspectionScore: finalScore,
+                        inspectionReport: newInspection._id,
+                        // Note: We don't change Listing status here, OrderService handles that flow
+                    });
+                }
                 // 5. Trigger Order State Machine
                 const orderService = new OrderService_1.OrderService();
                 let nextStatus = Order_1.OrderStatus.IN_INSPECTION; // fallback
@@ -507,7 +548,9 @@ class InspectionController {
             try {
                 const inspectorId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
                 if (!inspectorId) {
-                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                    return res
+                        .status(401)
+                        .json({ success: false, message: "Unauthorized" });
                 }
                 const { page = 1, limit = 20 } = req.query;
                 // Find orders in IN_INSPECTION status
@@ -549,7 +592,9 @@ class InspectionController {
             try {
                 const inspectorId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
                 if (!inspectorId) {
-                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                    return res
+                        .status(401)
+                        .json({ success: false, message: "Unauthorized" });
                 }
                 const { page = 1, limit = 20 } = req.query;
                 const inspections = yield Inspection_1.Inspection.find({ inspectorId })

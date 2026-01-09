@@ -12,7 +12,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrderService = void 0;
 const Order_1 = require("../models/Order");
 const Listing_1 = require("../models/Listing");
+const User_1 = require("../models/User");
 const mongoose_1 = require("mongoose");
+const NotificationService_1 = require("./NotificationService");
 class OrderService {
     /**
      * Validate and transition order status
@@ -152,8 +154,27 @@ class OrderService {
      */
     static completeOrder(orderId, adminId) {
         return __awaiter(this, void 0, void 0, function* () {
-            const order = yield this.transitionStatus(orderId, Order_1.OrderStatus.COMPLETED, adminId, undefined, "Payment released to seller");
-            // Mark listing as SOLD
+            const order = yield Order_1.Order.findById(orderId);
+            if (!order) {
+                throw new Error("Order not found");
+            }
+            // 1. Transition Status
+            yield this.transitionStatus(orderId, Order_1.OrderStatus.COMPLETED, adminId, undefined, "Payment released to seller");
+            // 2. Distribute Funds (Split Payment)
+            const { itemPrice, platformFee, inspectionFee } = order.financials;
+            const sellerPayout = itemPrice - platformFee;
+            // Credit Seller
+            yield User_1.User.findByIdAndUpdate(order.sellerId, {
+                $inc: { "wallet.balance": sellerPayout },
+            });
+            // Credit Inspector (if applicable)
+            if (order.inspectorId && inspectionFee > 0) {
+                yield User_1.User.findByIdAndUpdate(order.inspectorId, {
+                    $inc: { "wallet.balance": inspectionFee },
+                });
+            }
+            // Note: Platform Fee and Shipping Fee are retained by the Platform (Company Account)
+            // 3. Mark listing as SOLD
             yield Listing_1.Listing.findByIdAndUpdate(order.listingId, { status: "SOLD" });
             return order;
         });
@@ -193,9 +214,13 @@ class OrderService {
      * In production, this would trigger email/push notifications
      */
     static emitOrderStatusChanged(order) {
-        // TODO: Emit to event emitter or message queue
-        console.log(`[ORDER EVENT] Order ${order._id} status changed to ${order.status}`);
-        // Example: this.eventEmitter.emit('order.statusChanged', { orderId: order._id, status: order.status });
+        return __awaiter(this, void 0, void 0, function* () {
+            // Notify Buyer
+            yield NotificationService_1.NotificationService.sendNotification(order.buyerId.toString(), "Order Update", `Your order #${order._id} status is now ${order.status}`, { orderId: order._id.toString(), status: order.status });
+            // Notify Seller
+            yield NotificationService_1.NotificationService.sendNotification(order.sellerId.toString(), "Order Update", `Order #${order._id} status is now ${order.status}`, { orderId: order._id.toString(), status: order.status });
+            console.log(`[ORDER EVENT] Order ${order._id} status changed to ${order.status}`);
+        });
     }
 }
 exports.OrderService = OrderService;
@@ -203,7 +228,11 @@ exports.OrderService = OrderService;
  * Finite State Machine - Define valid transitions
  */
 OrderService.VALID_TRANSITIONS = {
-    [Order_1.OrderStatus.CREATED]: [Order_1.OrderStatus.ESCROW_LOCKED, Order_1.OrderStatus.REFUNDED],
+    [Order_1.OrderStatus.CREATED]: [
+        Order_1.OrderStatus.ESCROW_LOCKED,
+        Order_1.OrderStatus.REFUNDED,
+        Order_1.OrderStatus.CANCELLED,
+    ],
     [Order_1.OrderStatus.ESCROW_LOCKED]: [
         Order_1.OrderStatus.IN_INSPECTION,
         Order_1.OrderStatus.REFUNDED,
@@ -226,5 +255,6 @@ OrderService.VALID_TRANSITIONS = {
     [Order_1.OrderStatus.COMPLETED]: [Order_1.OrderStatus.DISPUTED],
     [Order_1.OrderStatus.DISPUTED]: [Order_1.OrderStatus.REFUNDED, Order_1.OrderStatus.COMPLETED],
     [Order_1.OrderStatus.REFUNDED]: [],
+    [Order_1.OrderStatus.CANCELLED]: [],
 };
 //# sourceMappingURL=OrderService.js.map

@@ -13,7 +13,11 @@ export class OrderService {
     OrderStatus,
     OrderStatus[]
   > = {
-    [OrderStatus.CREATED]: [OrderStatus.ESCROW_LOCKED, OrderStatus.REFUNDED],
+    [OrderStatus.CREATED]: [
+      OrderStatus.ESCROW_LOCKED,
+      OrderStatus.REFUNDED,
+      OrderStatus.CANCELLED,
+    ],
     [OrderStatus.ESCROW_LOCKED]: [
       OrderStatus.IN_INSPECTION,
       OrderStatus.REFUNDED,
@@ -36,6 +40,7 @@ export class OrderService {
     [OrderStatus.COMPLETED]: [OrderStatus.DISPUTED],
     [OrderStatus.DISPUTED]: [OrderStatus.REFUNDED, OrderStatus.COMPLETED],
     [OrderStatus.REFUNDED]: [],
+    [OrderStatus.CANCELLED]: [],
   };
 
   /**
@@ -258,7 +263,13 @@ export class OrderService {
     orderId: string,
     adminId: string
   ): Promise<IOrder> {
-    const order = await this.transitionStatus(
+    const order = await Order.findById(orderId);
+    if (!order) {
+      throw new Error("Order not found");
+    }
+
+    // 1. Transition Status
+    await this.transitionStatus(
       orderId,
       OrderStatus.COMPLETED,
       adminId,
@@ -266,7 +277,25 @@ export class OrderService {
       "Payment released to seller"
     );
 
-    // Mark listing as SOLD
+    // 2. Distribute Funds (Split Payment)
+    const { itemPrice, platformFee, inspectionFee } = order.financials;
+    const sellerPayout = itemPrice - platformFee;
+
+    // Credit Seller
+    await User.findByIdAndUpdate(order.sellerId, {
+      $inc: { "wallet.balance": sellerPayout },
+    });
+
+    // Credit Inspector (if applicable)
+    if (order.inspectorId && inspectionFee > 0) {
+      await User.findByIdAndUpdate(order.inspectorId, {
+        $inc: { "wallet.balance": inspectionFee },
+      });
+    }
+
+    // Note: Platform Fee and Shipping Fee are retained by the Platform (Company Account)
+
+    // 3. Mark listing as SOLD
     await Listing.findByIdAndUpdate(order.listingId, { status: "SOLD" });
 
     return order;

@@ -28,6 +28,8 @@ const wishlistRoutes_1 = require("./routes/wishlistRoutes");
 const disputeRoutes_1 = require("./routes/disputeRoutes");
 const adminRoutes_1 = require("./routes/adminRoutes");
 const chatbotRoutes_1 = require("./routes/chatbotRoutes");
+const logisticsRoutes_1 = require("./routes/logisticsRoutes");
+const notificationRoutes_1 = require("./routes/notificationRoutes");
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 // Fix for missing Node.js type definitions
 // declare var __dirname: string;
@@ -122,6 +124,8 @@ app.use("/api/wishlist", wishlistRoutes_1.wishlistRoutes);
 app.use("/api/disputes", disputeRoutes_1.disputeRoutes);
 app.use("/api/admin", adminRoutes_1.adminRoutes);
 app.use("/api/chatbot", chatbotRoutes_1.chatbotRoutes);
+app.use("/api/logistics", logisticsRoutes_1.logisticsRoutes);
+app.use("/api/notifications", notificationRoutes_1.notificationRoutes);
 app.use("/api/users", userRoutes_1.default);
 // Error Handling Middleware
 app.use((err, req, res, next) => {

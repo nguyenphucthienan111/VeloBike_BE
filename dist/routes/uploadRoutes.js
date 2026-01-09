@@ -34,4 +34,29 @@ exports.uploadRoutes = (0, express_1.Router)();
  */
 exports.uploadRoutes.post("/", authMiddleware_1.protect, // Any logged in user (Seller/Inspector) can upload
 upload.single("image"), UploadController_1.UploadController.uploadImage);
+/**
+ * @swagger
+ * /api/upload/360:
+ *   post:
+ *     summary: Upload 36 images for 360 view
+ *     tags: [Upload]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *     responses:
+ *       200:
+ *         description: Images uploaded, returns array of URLs
+ */
+exports.uploadRoutes.post("/360", authMiddleware_1.protect, upload.array("images", 72), // Allow up to 72 frames
+UploadController_1.UploadController.upload360);
 //# sourceMappingURL=uploadRoutes.js.map
