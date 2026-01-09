@@ -98,7 +98,7 @@ class OrderService {
             if (!order) {
                 throw new Error("Order not found");
             }
-            return this.transitionStatus(orderId, Order_1.OrderStatus.ESCROW_LOCKED, order.buyerId.toString(), `Payment received: ${paymentGatewayId}`);
+            return this.transitionStatus(orderId, Order_1.OrderStatus.ESCROW_LOCKED, order.buyerId.toString(), undefined, `Payment received: ${paymentGatewayId}`);
         });
     }
     /**
@@ -112,7 +112,7 @@ class OrderService {
             }
             order.inspectorId = new mongoose_1.Types.ObjectId(inspectorId);
             yield order.save();
-            return this.transitionStatus(orderId, Order_1.OrderStatus.IN_INSPECTION, inspectorId, "Inspection started");
+            return this.transitionStatus(orderId, Order_1.OrderStatus.IN_INSPECTION, inspectorId, undefined, "Inspection started");
         });
     }
     /**
@@ -120,7 +120,7 @@ class OrderService {
      */
     static inspectionPassed(orderId, inspectorId) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.transitionStatus(orderId, Order_1.OrderStatus.INSPECTION_PASSED, inspectorId, "Inspection passed");
+            return this.transitionStatus(orderId, Order_1.OrderStatus.INSPECTION_PASSED, inspectorId, undefined, "Inspection passed");
         });
     }
     /**
@@ -128,7 +128,7 @@ class OrderService {
      */
     static inspectionFailed(orderId, inspectorId) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.transitionStatus(orderId, Order_1.OrderStatus.INSPECTION_FAILED, inspectorId, "Inspection failed");
+            return this.transitionStatus(orderId, Order_1.OrderStatus.INSPECTION_FAILED, inspectorId, undefined, "Inspection failed");
         });
     }
     /**
@@ -136,7 +136,7 @@ class OrderService {
      */
     static markShipped(orderId, sellerId) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.transitionStatus(orderId, Order_1.OrderStatus.SHIPPING, sellerId, "Item shipped");
+            return this.transitionStatus(orderId, Order_1.OrderStatus.SHIPPING, sellerId, undefined, "Item shipped");
         });
     }
     /**
@@ -144,7 +144,7 @@ class OrderService {
      */
     static markDelivered(orderId, buyerId) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.transitionStatus(orderId, Order_1.OrderStatus.DELIVERED, buyerId, "Item received");
+            return this.transitionStatus(orderId, Order_1.OrderStatus.DELIVERED, buyerId, undefined, "Item received");
         });
     }
     /**
@@ -152,7 +152,7 @@ class OrderService {
      */
     static completeOrder(orderId, adminId) {
         return __awaiter(this, void 0, void 0, function* () {
-            const order = yield this.transitionStatus(orderId, Order_1.OrderStatus.COMPLETED, adminId, "Payment released to seller");
+            const order = yield this.transitionStatus(orderId, Order_1.OrderStatus.COMPLETED, adminId, undefined, "Payment released to seller");
             // Mark listing as SOLD
             yield Listing_1.Listing.findByIdAndUpdate(order.listingId, { status: "SOLD" });
             return order;
@@ -163,7 +163,7 @@ class OrderService {
      */
     static refundOrder(orderId, adminId, reason) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.transitionStatus(orderId, Order_1.OrderStatus.REFUNDED, adminId, `Refunded: ${reason}`);
+            return this.transitionStatus(orderId, Order_1.OrderStatus.REFUNDED, adminId, undefined, `Refunded: ${reason}`);
         });
     }
     /**
@@ -171,7 +171,7 @@ class OrderService {
      */
     static openDispute(orderId, claimantId) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.transitionStatus(orderId, Order_1.OrderStatus.DISPUTED, claimantId, "Dispute opened");
+            return this.transitionStatus(orderId, Order_1.OrderStatus.DISPUTED, claimantId, undefined, "Dispute opened");
         });
     }
     /**

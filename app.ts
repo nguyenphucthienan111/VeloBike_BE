@@ -25,11 +25,13 @@ import { wishlistRoutes } from "./routes/wishlistRoutes";
 import { disputeRoutes } from "./routes/disputeRoutes";
 import { adminRoutes } from "./routes/adminRoutes";
 import { chatbotRoutes } from "./routes/chatbotRoutes";
+import { logisticsRoutes } from "./routes/logisticsRoutes";
+import userRoutes from "./routes/userRoutes";
 
 // Fix for missing Node.js type definitions
-declare var __dirname: string;
-declare var require: any;
-declare var module: any;
+// declare var __dirname: string;
+// declare var require: any;
+// declare var module: any;
 
 // Initialize App & Socket.io
 const app = express();
@@ -134,7 +136,8 @@ app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/disputes", disputeRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/chatbot", chatbotRoutes);
-app.use("/api/users", require("./routes/userRoutes").default);
+app.use("/api/logistics", logisticsRoutes);
+app.use("/api/users", userRoutes);
 
 // Error Handling Middleware
 app.use((err: any, req: any, res: any, next: any) => {

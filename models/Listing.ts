@@ -10,6 +10,7 @@ export enum BikeType {
   MTB = "MTB",
   GRAVEL = "GRAVEL",
   TRIATHLON = "TRIATHLON",
+  E_BIKE = "E_BIKE",
 }
 
 export enum ListingStatus {
@@ -180,9 +181,22 @@ const MtbSchema = new Schema({
   },
 });
 
+// --- E-BIKE ---
+const EBikeSchema = new Schema({
+  specs: {
+    frameMaterial: String,
+    motor: String, // e.g., Bosch Performance Line CX
+    battery: String, // e.g., 625Wh
+    range: String, // e.g., 80km
+    maxSpeed: String, // e.g., 25km/h
+    odometer: Number, // Total km ridden
+  },
+});
+
 // 5. Apply Discriminators
 export const RoadListing = Listing.discriminator(BikeType.ROAD, RoadBikeSchema);
 export const MtbListing = Listing.discriminator(BikeType.MTB, MtbSchema);
+export const EBikeListing = Listing.discriminator(BikeType.E_BIKE, EBikeSchema);
 export const TriathlonListing = Listing.discriminator(
   BikeType.TRIATHLON,
   RoadBikeSchema

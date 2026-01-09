@@ -375,6 +375,149 @@ export class ListingController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  // GET /api/listings/search/advanced
+  // Faceted Search using Aggregation Pipeline
+  static async advancedSearch(req: any, res: any) {
+    try {
+      const {
+        keyword,
+        type, // ROAD, MTB, etc.
+        brand,
+        minPrice,
+        maxPrice,
+        size,
+        frameMaterial,
+        brakeType,
+        groupset,
+        wheelSize,
+        condition,
+        lat,
+        lng,
+        radius = 20, // km
+        page = 1,
+        limit = 20,
+        sortBy = "newest", // newest, price_asc, price_desc, views
+      } = req.query;
+
+      const pipeline: any[] = [];
+
+      // 1. Full-text search or Geo search (must be first)
+      if (lat && lng) {
+        pipeline.push({
+          $geoNear: {
+            near: {
+              type: "Point",
+              coordinates: [parseFloat(lng), parseFloat(lat)],
+            },
+            distanceField: "distance",
+            maxDistance: parseFloat(radius) * 1000,
+            spherical: true,
+          },
+        });
+      } else if (keyword) {
+        pipeline.push({
+          $match: { $text: { $search: keyword } },
+        });
+      }
+
+      // 2. Match Filters
+      const matchStage: any = { status: "PUBLISHED" };
+
+      if (type && type !== "ALL") matchStage.type = type;
+      if (brand) matchStage["generalInfo.brand"] = { $regex: new RegExp(brand, "i") };
+      if (size) matchStage["generalInfo.size"] = size;
+      if (condition) matchStage["generalInfo.condition"] = condition;
+
+      // Price Range
+      if (minPrice || maxPrice) {
+        matchStage["pricing.amount"] = {};
+        if (minPrice) matchStage["pricing.amount"].$gte = Number(minPrice);
+        if (maxPrice) matchStage["pricing.amount"].$lte = Number(maxPrice);
+      }
+
+      // Specs Filters (Polymorphic fields)
+      if (frameMaterial) matchStage["specs.frameMaterial"] = { $regex: new RegExp(frameMaterial, "i") };
+      if (brakeType) matchStage["specs.brakeType"] = brakeType;
+      if (groupset) matchStage["specs.groupset"] = { $regex: new RegExp(groupset, "i") };
+      if (wheelSize) matchStage["specs.wheelSize"] = wheelSize;
+
+      pipeline.push({ $match: matchStage });
+
+      // 3. Sorting
+      let sortStage: any = {};
+      switch (sortBy) {
+        case "price_asc":
+          sortStage["pricing.amount"] = 1;
+          break;
+        case "price_desc":
+          sortStage["pricing.amount"] = -1;
+          break;
+        case "views":
+          sortStage.views = -1;
+          break;
+        case "newest":
+        default:
+          sortStage.createdAt = -1;
+      }
+      pipeline.push({ $sort: sortStage });
+
+      // 4. Facets (Pagination + Stats)
+      pipeline.push({
+        $facet: {
+          data: [
+            { $skip: (Number(page) - 1) * Number(limit) },
+            { $limit: Number(limit) },
+            {
+              $lookup: {
+                from: "users",
+                localField: "sellerId",
+                foreignField: "_id",
+                as: "seller",
+              },
+            },
+            { $unwind: "$seller" },
+            {
+              $project: {
+                "seller.passwordHash": 0,
+                "seller.googleId": 0,
+                "seller.facebookId": 0,
+              },
+            },
+          ],
+          totalCount: [{ $count: "count" }],
+          // Aggregations for filter menu
+          brands: [{ $group: { _id: "$generalInfo.brand", count: { $sum: 1 } } }],
+          types: [{ $group: { _id: "$type", count: { $sum: 1 } } }],
+          frameMaterials: [{ $group: { _id: "$specs.frameMaterial", count: { $sum: 1 } } }],
+        },
+      });
+
+      const result = await Listing.aggregate(pipeline);
+      const data = result[0].data;
+      const total = result[0].totalCount[0] ? result[0].totalCount[0].count : 0;
+      const facets = {
+        brands: result[0].brands,
+        types: result[0].types,
+        frameMaterials: result[0].frameMaterials,
+      };
+
+      res.json({
+        success: true,
+        data,
+        facets,
+        pagination: {
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          pages: Math.ceil(total / Number(limit)),
+        },
+      });
+    } catch (error: any) {
+      console.error("Advanced Search Error:", error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
 
 /**

@@ -325,6 +325,35 @@ function getChecklistByBikeType(bikeType: BikeType): any[] {
         },
       ];
 
+    case BikeType.E_BIKE:
+      return [
+        ...baseChecklist,
+        {
+          component: "Motor Function",
+          category: "ELECTRONICS",
+          required: true,
+          description: "Kiểm tra hoạt động của motor",
+        },
+        {
+          component: "Battery Health",
+          category: "ELECTRONICS",
+          required: true,
+          description: "Kiểm tra tình trạng pin và số chu kỳ sạc",
+        },
+        {
+          component: "Display/Controller",
+          category: "ELECTRONICS",
+          required: true,
+          description: "Kiểm tra màn hình và bộ điều khiển",
+        },
+        {
+          component: "Charger",
+          category: "ACCESSORIES",
+          required: true,
+          description: "Kiểm tra sạc pin",
+        },
+      ];
+
     default:
       return baseChecklist;
   }

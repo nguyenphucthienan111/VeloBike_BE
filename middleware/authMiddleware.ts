@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { UserRole } from "../models/User";
+import jwt from "jsonwebtoken";
+import { User, UserRole } from "../models/User";
 
 // Extend Express Request to include user info
 export interface AuthRequest extends Request {
@@ -20,39 +21,22 @@ export const protect = async (req: any, res: any, next: NextFunction) => {
     try {
       token = req.headers.authorization.split(" ")[1];
 
-      // --- REAL JWT VERIFICATION LOGIC (Commented out for demo) ---
-      // const decoded = jwt.verify(token, process.env.JWT_SECRET) as any;
-      // req.user = { id: decoded.id, role: decoded.role };
+      const secret = process.env.JWT_SECRET || "dev_secret";
+      const decoded: any = jwt.verify(token, secret);
 
-      // --- UPDATED MOCK LOGIC FOR DEMO ---
-      // Format token để test: "mock_jwt_token_{USER_ID}_{ROLE}"
-      // Ví dụ: "Bearer mock_jwt_token_123_SELLER" -> UserID: 123, Role: SELLER
-      if (token.startsWith("mock_jwt_token_")) {
-        const parts = token.split("_");
-        // parts[0]=mock, [1]=jwt, [2]=token, [3]=UserId, [4]=Role (Optional)
-
-        const userId = parts[3] || "default_user_id";
-        const roleStr = parts[4] ? parts[4].toUpperCase() : "BUYER";
-
-        // Validate Role
-        const role = Object.values(UserRole).includes(roleStr as UserRole)
-          ? (roleStr as UserRole)
-          : UserRole.BUYER;
-
-        req.user = {
-          id: userId,
-          role: role,
-        };
-        next();
-      } else {
-        res
+      // Check if user exists in DB
+      const user = await User.findById(decoded.id).select("-passwordHash");
+      if (!user) {
+        return res
           .status(401)
-          .json({
-            success: false,
-            message: "Not authorized, token format invalid",
-          });
+          .json({ success: false, message: "User not found" });
       }
-      // -----------------------------------
+
+      req.user = {
+        id: user._id.toString(),
+        role: user.role,
+      };
+      next();
     } catch (error) {
       res
         .status(401)

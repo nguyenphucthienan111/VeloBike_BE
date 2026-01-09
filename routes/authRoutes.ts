@@ -147,3 +147,29 @@ authRoutes.post("/login", validationRules.login, validate, AuthController.login 
  *                   $ref: '#/components/schemas/User'
  */
 authRoutes.post("/google", AuthController.googleLogin as any);
+
+/**
+ * @swagger
+ * /api/auth/facebook:
+ *   post:
+ *     summary: Log in or Register using Facebook Access Token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - facebookToken
+ *               - userID
+ *             properties:
+ *               facebookToken:
+ *                 type: string
+ *               userID:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login/Register successful
+ */
+authRoutes.post("/facebook", AuthController.facebookLogin as any);

@@ -3,6 +3,8 @@ import { Listing } from "../models/Listing";
 import { User } from "../models/User";
 import mongoose, { Types } from "mongoose";
 
+import { NotificationService } from "./NotificationService";
+
 export class OrderService {
   /**
    * Finite State Machine - Define valid transitions
@@ -159,6 +161,7 @@ export class OrderService {
       orderId,
       OrderStatus.ESCROW_LOCKED,
       order.buyerId.toString(),
+      undefined,
       `Payment received: ${paymentGatewayId}`
     );
   }
@@ -182,6 +185,7 @@ export class OrderService {
       orderId,
       OrderStatus.IN_INSPECTION,
       inspectorId,
+      undefined,
       "Inspection started"
     );
   }
@@ -197,6 +201,7 @@ export class OrderService {
       orderId,
       OrderStatus.INSPECTION_PASSED,
       inspectorId,
+      undefined,
       "Inspection passed"
     );
   }
@@ -212,6 +217,7 @@ export class OrderService {
       orderId,
       OrderStatus.INSPECTION_FAILED,
       inspectorId,
+      undefined,
       "Inspection failed"
     );
   }
@@ -224,6 +230,7 @@ export class OrderService {
       orderId,
       OrderStatus.SHIPPING,
       sellerId,
+      undefined,
       "Item shipped"
     );
   }
@@ -239,6 +246,7 @@ export class OrderService {
       orderId,
       OrderStatus.DELIVERED,
       buyerId,
+      undefined,
       "Item received"
     );
   }
@@ -254,6 +262,7 @@ export class OrderService {
       orderId,
       OrderStatus.COMPLETED,
       adminId,
+      undefined,
       "Payment released to seller"
     );
 
@@ -275,6 +284,7 @@ export class OrderService {
       orderId,
       OrderStatus.REFUNDED,
       adminId,
+      undefined,
       `Refunded: ${reason}`
     );
   }
@@ -290,6 +300,7 @@ export class OrderService {
       orderId,
       OrderStatus.DISPUTED,
       claimantId,
+      undefined,
       "Dispute opened"
     );
   }
@@ -313,11 +324,25 @@ export class OrderService {
    * Emit order status changed event
    * In production, this would trigger email/push notifications
    */
-  private static emitOrderStatusChanged(order: IOrder) {
-    // TODO: Emit to event emitter or message queue
+  private static async emitOrderStatusChanged(order: IOrder) {
+    // Notify Buyer
+    await NotificationService.sendNotification(
+      order.buyerId.toString(),
+      "Order Update",
+      `Your order #${order._id} status is now ${order.status}`,
+      { orderId: order._id.toString(), status: order.status }
+    );
+
+    // Notify Seller
+    await NotificationService.sendNotification(
+      order.sellerId.toString(),
+      "Order Update",
+      `Order #${order._id} status is now ${order.status}`,
+      { orderId: order._id.toString(), status: order.status }
+    );
+
     console.log(
       `[ORDER EVENT] Order ${order._id} status changed to ${order.status}`
     );
-    // Example: this.eventEmitter.emit('order.statusChanged', { orderId: order._id, status: order.status });
   }
 }

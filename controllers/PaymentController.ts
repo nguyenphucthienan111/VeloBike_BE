@@ -3,7 +3,6 @@ import { Order, OrderStatus } from "../models/Order";
 import { OrderService } from "../services/OrderService";
 import { UserRole } from "../models/User";
 import { PaymentService } from "../services/PaymentService";
-import { OrderService as OrderServiceClass } from "../services/OrderService";
 
 export class PaymentController {
   // POST /api/payment/create-link

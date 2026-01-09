@@ -248,6 +248,64 @@ export class AuthController {
     }
   }
 
+  // POST /api/auth/facebook
+  // Verify Facebook Access Token and create/link user
+  // Note: In production, verify token via Graph API: https://graph.facebook.com/me?access_token=...
+  static async facebookLogin(req: Request, res: Response) {
+    try {
+      const { facebookToken, userID } = req.body;
+      if (!facebookToken || !userID)
+        return res
+          .status(400)
+          .json({ success: false, message: "facebookToken and userID are required" });
+
+      // Mock verification (Replace with real Graph API call)
+      // const response = await axios.get(`https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${facebookToken}`);
+      // const { id, name, email, picture } = response.data;
+      
+      // Simulated data for demo/stub
+      const email = `fb_${userID}@velobike.local`; // Fallback if FB doesn't return email
+      const name = "Facebook User";
+      const picture = `https://graph.facebook.com/${userID}/picture?type=large`;
+
+      let user = await User.findOne({ facebookId: userID });
+      if (!user) {
+        // Try to link by email if exists
+        user = await User.findOne({ email });
+        if (user) {
+           user.facebookId = userID;
+           await user.save();
+        } else {
+           user = new User({
+             email,
+             fullName: name,
+             facebookId: userID,
+             avatar: picture,
+             role: UserRole.BUYER,
+             kycStatus: KycStatus.PENDING,
+             emailVerified: true,
+           } as any);
+           await user.save();
+        }
+      }
+
+      const token = generateToken(user);
+      res.json({
+        success: true,
+        token,
+        user: {
+          id: user._id,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role,
+        },
+      });
+    } catch (err: any) {
+      console.error("Facebook login error:", err.message);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
   // POST /api/auth/send-otp
   // Body: { phone }
   static async sendOtp(req: Request, res: Response) {

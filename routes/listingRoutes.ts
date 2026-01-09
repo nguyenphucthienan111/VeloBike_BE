@@ -157,6 +157,37 @@ listingRoutes.get("/nearby", ListingController.getNearby as any);
 
 /**
  * @swagger
+ * /api/listings/search/advanced:
+ *   get:
+ *     summary: Advanced faceted search for listings
+ *     tags: [Listings]
+ *     parameters:
+ *       - in: query
+ *         name: keyword
+ *         schema: { type: string }
+ *       - in: query
+ *         name: type
+ *         schema: { type: string, enum: [ROAD, MTB, GRAVEL, TRIATHLON, E_BIKE] }
+ *       - in: query
+ *         name: brand
+ *         schema: { type: string }
+ *       - in: query
+ *         name: minPrice
+ *         schema: { type: number }
+ *       - in: query
+ *         name: maxPrice
+ *         schema: { type: number }
+ *       - in: query
+ *         name: sortBy
+ *         schema: { type: string, enum: [newest, price_asc, price_desc, views] }
+ *     responses:
+ *       200:
+ *         description: Search results with facets
+ */
+listingRoutes.get("/search/advanced", ListingController.advancedSearch as any);
+
+/**
+ * @swagger
  * /api/listings/fit-calculator:
  *   post:
  *     summary: Calculate bike fit based on rider measurements

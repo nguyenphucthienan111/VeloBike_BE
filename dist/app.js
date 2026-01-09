@@ -28,6 +28,11 @@ const wishlistRoutes_1 = require("./routes/wishlistRoutes");
 const disputeRoutes_1 = require("./routes/disputeRoutes");
 const adminRoutes_1 = require("./routes/adminRoutes");
 const chatbotRoutes_1 = require("./routes/chatbotRoutes");
+const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
+// Fix for missing Node.js type definitions
+// declare var __dirname: string;
+// declare var require: any;
+// declare var module: any;
 // Initialize App & Socket.io
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
@@ -117,7 +122,7 @@ app.use("/api/wishlist", wishlistRoutes_1.wishlistRoutes);
 app.use("/api/disputes", disputeRoutes_1.disputeRoutes);
 app.use("/api/admin", adminRoutes_1.adminRoutes);
 app.use("/api/chatbot", chatbotRoutes_1.chatbotRoutes);
-app.use("/api/users", require("./routes/userRoutes").default);
+app.use("/api/users", userRoutes_1.default);
 // Error Handling Middleware
 app.use((err, req, res, next) => {
     console.error(err.stack);
