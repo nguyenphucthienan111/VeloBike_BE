@@ -17,6 +17,7 @@ export class OrderService {
       OrderStatus.ESCROW_LOCKED,
       OrderStatus.REFUNDED,
       OrderStatus.CANCELLED,
+      OrderStatus.DISPUTED, // Allow dispute from created state
     ],
     [OrderStatus.ESCROW_LOCKED]: [
       OrderStatus.IN_INSPECTION,
@@ -71,9 +72,9 @@ export class OrderService {
     order.timeline.push({
       status: newStatus,
       timestamp: new Date(),
-      actorId: new Types.ObjectId(actorId),
+      actorId: actorId && Types.ObjectId.isValid(actorId) ? new Types.ObjectId(actorId) : undefined,
       note,
-    });
+    } as any);
 
     await order.save();
 
@@ -298,7 +299,8 @@ export class OrderService {
     // 3. Mark listing as SOLD
     await Listing.findByIdAndUpdate(order.listingId, { status: "SOLD" });
 
-    return order;
+    // Return updated order
+    return await Order.findById(orderId) as IOrder;
   }
 
   /**

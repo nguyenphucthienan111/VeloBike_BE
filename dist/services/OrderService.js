@@ -35,7 +35,7 @@ class OrderService {
             order.timeline.push({
                 status: newStatus,
                 timestamp: new Date(),
-                actorId: new mongoose_1.Types.ObjectId(actorId),
+                actorId: actorId && mongoose_1.Types.ObjectId.isValid(actorId) ? new mongoose_1.Types.ObjectId(actorId) : undefined,
                 note,
             });
             yield order.save();
@@ -176,7 +176,8 @@ class OrderService {
             // Note: Platform Fee and Shipping Fee are retained by the Platform (Company Account)
             // 3. Mark listing as SOLD
             yield Listing_1.Listing.findByIdAndUpdate(order.listingId, { status: "SOLD" });
-            return order;
+            // Return updated order
+            return yield Order_1.Order.findById(orderId);
         });
     }
     /**
@@ -232,6 +233,7 @@ OrderService.VALID_TRANSITIONS = {
         Order_1.OrderStatus.ESCROW_LOCKED,
         Order_1.OrderStatus.REFUNDED,
         Order_1.OrderStatus.CANCELLED,
+        Order_1.OrderStatus.DISPUTED, // Allow dispute from created state
     ],
     [Order_1.OrderStatus.ESCROW_LOCKED]: [
         Order_1.OrderStatus.IN_INSPECTION,
