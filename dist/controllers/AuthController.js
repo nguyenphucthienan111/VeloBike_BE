@@ -63,8 +63,8 @@ class AuthController {
                 const subject = "VeloBike - Xác thực email của bạn";
                 const html = `<p>Xin chào ${newUser.fullName},</p><p>Mã xác thực email của bạn là: <strong>${code}</strong></p><p>Mã có hiệu lực trong 15 phút.</p>`;
                 // Attempt to send and log result to server console for debugging (useful when requests come from Swagger UI)
-                const _sent = yield EmailService_1.EmailService.sendEmail({ to: email, subject, html });
-                console.log(`AuthController.register: sendEmail -> ${email} => ${_sent ? "OK" : "FAILED"}`);
+                const _sent = yield EmailService_1.EmailService.sendVerificationEmail(email, newUser.fullName, code);
+                console.log(`AuthController.register: sendVerificationEmail -> ${email} => ${_sent ? "OK" : "FAILED"}`);
                 // Return limited user data; token issued but emailVerified flag false
                 const token = generateToken(newUser);
                 res.status(201).json({
@@ -411,9 +411,7 @@ class AuthController {
                 const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
                 yield Otp_1.Otp.findOneAndUpdate({ identifier: `reset:${email}` }, { code, expiresAt }, { upsert: true, new: true });
                 // Send Email
-                const subject = "VeloBike - Password Reset OTP";
-                const html = `<p>Your password reset code is: <strong>${code}</strong></p>`;
-                yield EmailService_1.EmailService.sendEmail({ to: email, subject, html });
+                yield EmailService_1.EmailService.sendPasswordResetEmail(email, user.fullName, code);
                 res.json({ success: true, message: "Reset OTP sent to email" });
             }
             catch (err) {

@@ -184,6 +184,66 @@ exports.listingRoutes.get("/nearby", ListingController_1.ListingController.getNe
 exports.listingRoutes.get("/search/advanced", ListingController_1.ListingController.advancedSearch);
 /**
  * @swagger
+ * /api/listings/search/suggestions:
+ *   get:
+ *     summary: Get search suggestions/autocomplete
+ *     tags: [Listings]
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Search query
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: number
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Search suggestions
+ */
+exports.listingRoutes.get("/search/suggestions", ListingController_1.ListingController.getSearchSuggestions);
+/**
+ * @swagger
+ * /api/listings/search/facets:
+ *   get:
+ *     summary: Get search facets for filtering
+ *     tags: [Listings]
+ *     responses:
+ *       200:
+ *         description: Available facets
+ */
+exports.listingRoutes.get("/search/facets", ListingController_1.ListingController.getSearchFacets);
+/**
+ * @swagger
+ * /api/listings/search/save:
+ *   post:
+ *     summary: Save search query for user
+ *     tags: [Listings]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               query:
+ *                 type: string
+ *               filters:
+ *                 type: object
+ *               name:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Search saved
+ */
+exports.listingRoutes.post("/search/save", authMiddleware_1.protect, ListingController_1.ListingController.saveSearch);
+/**
+ * @swagger
  * /api/listings/fit-calculator:
  *   post:
  *     summary: Calculate bike fit based on rider measurements

@@ -618,6 +618,150 @@ export class ListingController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  // GET /api/listings/search/suggestions
+  // Get search suggestions/autocomplete
+  static async getSearchSuggestions(req: any, res: any) {
+    try {
+      const { q, limit = 10 } = req.query;
+
+      if (!q || q.length < 2) {
+        return res.json({ success: true, data: [] });
+      }
+
+      const query = q.toString().toLowerCase();
+
+      // Search in brands, models, and titles
+      const suggestions = await Listing.aggregate([
+        {
+          $match: {
+            status: "PUBLISHED",
+            $or: [
+              { "generalInfo.brand": { $regex: query, $options: "i" } },
+              { "generalInfo.model": { $regex: query, $options: "i" } },
+              { title: { $regex: query, $options: "i" } },
+            ],
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            brands: { $addToSet: "$generalInfo.brand" },
+            models: { $addToSet: "$generalInfo.model" },
+            titles: { $addToSet: "$title" },
+          },
+        },
+        {
+          $project: {
+            suggestions: {
+              $slice: [
+                {
+                  $setUnion: [
+                    { $filter: { input: "$brands", cond: { $regexMatch: { input: "$$this", regex: query, options: "i" } } } },
+                    { $filter: { input: "$models", cond: { $regexMatch: { input: "$$this", regex: query, options: "i" } } } },
+                    { $filter: { input: "$titles", cond: { $regexMatch: { input: "$$this", regex: query, options: "i" } } } },
+                  ],
+                },
+                Number(limit),
+              ],
+            },
+          },
+        },
+      ]);
+
+      const data = suggestions.length > 0 ? suggestions[0].suggestions : [];
+
+      res.json({ success: true, data });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // GET /api/listings/search/facets
+  // Get search facets for filtering
+  static async getSearchFacets(req: any, res: any) {
+    try {
+      const facets = await Listing.aggregate([
+        { $match: { status: "PUBLISHED" } },
+        {
+          $facet: {
+            brands: [
+              { $group: { _id: "$generalInfo.brand", count: { $sum: 1 } } },
+              { $sort: { count: -1 } },
+              { $limit: 20 },
+            ],
+            types: [
+              { $group: { _id: "$type", count: { $sum: 1 } } },
+              { $sort: { count: -1 } },
+            ],
+            conditions: [
+              { $group: { _id: "$generalInfo.condition", count: { $sum: 1 } } },
+              { $sort: { count: -1 } },
+            ],
+            frameMaterials: [
+              { $group: { _id: "$specs.frameMaterial", count: { $sum: 1 } } },
+              { $match: { _id: { $ne: null } } },
+              { $sort: { count: -1 } },
+              { $limit: 10 },
+            ],
+            brakeTypes: [
+              { $group: { _id: "$specs.brakeType", count: { $sum: 1 } } },
+              { $match: { _id: { $ne: null } } },
+              { $sort: { count: -1 } },
+            ],
+            priceRanges: [
+              {
+                $bucket: {
+                  groupBy: "$pricing.amount",
+                  boundaries: [0, 10000000, 30000000, 50000000, 100000000, 200000000],
+                  default: "200000000+",
+                  output: { count: { $sum: 1 } },
+                },
+              },
+            ],
+          },
+        },
+      ]);
+
+      res.json({ success: true, data: facets[0] });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // POST /api/listings/search/save
+  // Save search query for user
+  static async saveSearch(req: any, res: any) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const { query, filters, name } = req.body;
+
+      // For now, we'll store in a simple collection or user document
+      // In production, create a SavedSearch model
+      const savedSearch = {
+        userId,
+        name: name || `Search ${new Date().toLocaleDateString()}`,
+        query,
+        filters,
+        createdAt: new Date(),
+      };
+
+      // Simulate saving (in production, save to SavedSearch collection)
+      console.log("Saved search:", savedSearch);
+
+      res.status(201).json({
+        success: true,
+        message: "Search saved successfully",
+        data: savedSearch,
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
 
 /**

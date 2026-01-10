@@ -1,4 +1,13 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -15,6 +24,12 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs")); // Import File System
 const http_1 = require("http");
 const socket_io_1 = require("socket.io");
+// Import Security Middleware
+const rateLimitMiddleware_1 = require("./middleware/rateLimitMiddleware");
+const securityMiddleware_1 = require("./middleware/securityMiddleware");
+const requestLoggerMiddleware_1 = require("./middleware/requestLoggerMiddleware");
+// Import Services
+const CacheService_1 = require("./services/CacheService");
 // Import Routes
 const authRoutes_1 = require("./routes/authRoutes");
 const listingRoutes_1 = require("./routes/listingRoutes");
@@ -30,11 +45,8 @@ const adminRoutes_1 = require("./routes/adminRoutes");
 const chatbotRoutes_1 = require("./routes/chatbotRoutes");
 const logisticsRoutes_1 = require("./routes/logisticsRoutes");
 const notificationRoutes_1 = require("./routes/notificationRoutes");
+const kycRoutes_1 = require("./routes/kycRoutes");
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
-// Fix for missing Node.js type definitions
-// declare var __dirname: string;
-// declare var require: any;
-// declare var module: any;
 // Initialize App & Socket.io
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
@@ -45,15 +57,26 @@ const io = new socket_io_1.Server(httpServer, {
     },
 });
 const PORT = process.env.PORT || 5000;
+// Initialize Cache Service
+CacheService_1.CacheService.init().catch(console.error);
 // Ensure uploads directory exists (Task B4 Fix)
 const uploadDir = path_1.default.join(__dirname, "uploads");
 if (!fs_1.default.existsSync(uploadDir)) {
     fs_1.default.mkdirSync(uploadDir);
     console.log("Created uploads directory");
 }
-// Middleware
+// Security Middleware (Apply early)
+app.use(securityMiddleware_1.securityHeaders);
+app.use((0, securityMiddleware_1.requestSizeLimiter)("50mb")); // Limit request size
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
+app.use(securityMiddleware_1.sanitizeInput); // Sanitize inputs
+// Logging Middleware
+app.use(requestLoggerMiddleware_1.requestLogger);
+app.use(requestLoggerMiddleware_1.performanceMonitor);
+app.use(requestLoggerMiddleware_1.apiAnalytics);
+// General Rate Limiting
+app.use(rateLimitMiddleware_1.generalLimiter);
 // Inject Socket.io into Request object so Controllers can use it
 app.use((req, res, next) => {
     req.io = io;
@@ -111,13 +134,13 @@ mongoose_1.default
     .connect(MONGO_URI)
     .then(() => console.log("✅ MongoDB Connected"))
     .catch((err) => console.error("❌ MongoDB Connection Error:", err));
-// --- ROUTES REGISTRATION ---
-app.use("/api/auth", authRoutes_1.authRoutes);
-app.use("/api/listings", listingRoutes_1.listingRoutes);
+// --- ROUTES REGISTRATION WITH SPECIFIC RATE LIMITING ---
+app.use("/api/auth", rateLimitMiddleware_1.authLimiter, authRoutes_1.authRoutes);
+app.use("/api/listings", rateLimitMiddleware_1.searchLimiter, listingRoutes_1.listingRoutes);
 app.use("/api/orders", orderRoutes_1.orderRoutes);
 app.use("/api/inspections", inspectionRoutes_1.inspectionRoutes);
-app.use("/api/payment", paymentRoutes_1.paymentRoutes);
-app.use("/api/upload", uploadRoutes_1.uploadRoutes);
+app.use("/api/payment", rateLimitMiddleware_1.paymentLimiter, paymentRoutes_1.paymentRoutes);
+app.use("/api/upload", rateLimitMiddleware_1.uploadLimiter, uploadRoutes_1.uploadRoutes);
 app.use("/api/reviews", reviewRoutes_1.reviewRoutes);
 app.use("/api/messages", messageRoutes_1.messageRoutes);
 app.use("/api/wishlist", wishlistRoutes_1.wishlistRoutes);
@@ -126,19 +149,50 @@ app.use("/api/admin", adminRoutes_1.adminRoutes);
 app.use("/api/chatbot", chatbotRoutes_1.chatbotRoutes);
 app.use("/api/logistics", logisticsRoutes_1.logisticsRoutes);
 app.use("/api/notifications", notificationRoutes_1.notificationRoutes);
+app.use("/api/kyc", kycRoutes_1.kycRoutes);
 app.use("/api/users", userRoutes_1.default);
-// Error Handling Middleware
+// Health Check Endpoint
+app.get("/health", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const cacheStats = yield CacheService_1.CacheService.getStats();
+    res.json({
+        status: "OK",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        cache: cacheStats ? "Connected" : "Disconnected",
+        database: mongoose_1.default.connection.readyState === 1 ? "Connected" : "Disconnected",
+    });
+}));
+// Error Handling Middleware (Must be last)
+app.use(requestLoggerMiddleware_1.errorLogger);
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res
         .status(500)
         .json({ success: false, message: "Server Error", error: err.message });
 });
+// Graceful Shutdown
+process.on("SIGTERM", () => __awaiter(void 0, void 0, void 0, function* () {
+    console.log("SIGTERM received, shutting down gracefully");
+    yield CacheService_1.CacheService.close();
+    yield mongoose_1.default.connection.close();
+    httpServer.close(() => {
+        console.log("Process terminated");
+    });
+}));
+process.on("SIGINT", () => __awaiter(void 0, void 0, void 0, function* () {
+    console.log("SIGINT received, shutting down gracefully");
+    yield CacheService_1.CacheService.close();
+    yield mongoose_1.default.connection.close();
+    httpServer.close(() => {
+        console.log("Process terminated");
+    });
+}));
 // Start SERVER
 if (require.main === module) {
     httpServer.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
         console.log(`Swagger Docs available at http://localhost:${PORT}/api-docs`);
+        console.log(`Health Check available at http://localhost:${PORT}/health`);
         console.log(`Socket.io is ready`);
     });
 }

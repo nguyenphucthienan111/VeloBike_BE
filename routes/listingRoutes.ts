@@ -188,6 +188,69 @@ listingRoutes.get("/search/advanced", ListingController.advancedSearch as any);
 
 /**
  * @swagger
+ * /api/listings/search/suggestions:
+ *   get:
+ *     summary: Get search suggestions/autocomplete
+ *     tags: [Listings]
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Search query
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: number
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Search suggestions
+ */
+listingRoutes.get("/search/suggestions", ListingController.getSearchSuggestions as any);
+
+/**
+ * @swagger
+ * /api/listings/search/facets:
+ *   get:
+ *     summary: Get search facets for filtering
+ *     tags: [Listings]
+ *     responses:
+ *       200:
+ *         description: Available facets
+ */
+listingRoutes.get("/search/facets", ListingController.getSearchFacets as any);
+
+/**
+ * @swagger
+ * /api/listings/search/save:
+ *   post:
+ *     summary: Save search query for user
+ *     tags: [Listings]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               query:
+ *                 type: string
+ *               filters:
+ *                 type: object
+ *               name:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Search saved
+ */
+listingRoutes.post("/search/save", protect, ListingController.saveSearch as any);
+
+/**
+ * @swagger
  * /api/listings/fit-calculator:
  *   post:
  *     summary: Calculate bike fit based on rider measurements

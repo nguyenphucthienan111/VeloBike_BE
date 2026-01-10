@@ -63,9 +63,9 @@ export class AuthController {
       const subject = "VeloBike - Xác thực email của bạn";
       const html = `<p>Xin chào ${newUser.fullName},</p><p>Mã xác thực email của bạn là: <strong>${code}</strong></p><p>Mã có hiệu lực trong 15 phút.</p>`;
       // Attempt to send and log result to server console for debugging (useful when requests come from Swagger UI)
-      const _sent = await EmailService.sendEmail({ to: email, subject, html });
+      const _sent = await EmailService.sendVerificationEmail(email, newUser.fullName, code);
       console.log(
-        `AuthController.register: sendEmail -> ${email} => ${
+        `AuthController.register: sendVerificationEmail -> ${email} => ${
           _sent ? "OK" : "FAILED"
         }`
       );
@@ -443,9 +443,7 @@ export class AuthController {
       );
 
       // Send Email
-      const subject = "VeloBike - Password Reset OTP";
-      const html = `<p>Your password reset code is: <strong>${code}</strong></p>`;
-      await EmailService.sendEmail({ to: email, subject, html });
+      await EmailService.sendPasswordResetEmail(email, user.fullName, code);
 
       res.json({ success: true, message: "Reset OTP sent to email" });
     } catch (err: any) {

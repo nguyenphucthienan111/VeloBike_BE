@@ -12,6 +12,14 @@ import fs from "fs"; // Import File System
 import { createServer } from "http";
 import { Server } from "socket.io";
 
+// Import Security Middleware
+import { generalLimiter, authLimiter, paymentLimiter, uploadLimiter, searchLimiter } from "./middleware/rateLimitMiddleware";
+import { securityHeaders, sanitizeInput, requestSizeLimiter } from "./middleware/securityMiddleware";
+import { requestLogger, errorLogger, performanceMonitor, apiAnalytics } from "./middleware/requestLoggerMiddleware";
+
+// Import Services
+import { CacheService } from "./services/CacheService";
+
 // Import Routes
 import { authRoutes } from "./routes/authRoutes";
 import { listingRoutes } from "./routes/listingRoutes";
@@ -27,12 +35,8 @@ import { adminRoutes } from "./routes/adminRoutes";
 import { chatbotRoutes } from "./routes/chatbotRoutes";
 import { logisticsRoutes } from "./routes/logisticsRoutes";
 import { notificationRoutes } from "./routes/notificationRoutes";
+import { kycRoutes } from "./routes/kycRoutes";
 import userRoutes from "./routes/userRoutes";
-
-// Fix for missing Node.js type definitions
-// declare var __dirname: string;
-// declare var require: any;
-// declare var module: any;
 
 // Initialize App & Socket.io
 const app = express();
@@ -46,6 +50,9 @@ const io = new Server(httpServer, {
 
 const PORT = process.env.PORT || 5000;
 
+// Initialize Cache Service
+CacheService.init().catch(console.error);
+
 // Ensure uploads directory exists (Task B4 Fix)
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
@@ -53,9 +60,20 @@ if (!fs.existsSync(uploadDir)) {
   console.log("Created uploads directory");
 }
 
-// Middleware
+// Security Middleware (Apply early)
+app.use(securityHeaders);
+app.use(requestSizeLimiter("50mb")); // Limit request size
 app.use(cors());
 app.use(express.json() as any);
+app.use(sanitizeInput); // Sanitize inputs
+
+// Logging Middleware
+app.use(requestLogger);
+app.use(performanceMonitor);
+app.use(apiAnalytics);
+
+// General Rate Limiting
+app.use(generalLimiter);
 
 // Inject Socket.io into Request object so Controllers can use it
 app.use((req: any, res, next) => {
@@ -124,13 +142,13 @@ mongoose
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err: any) => console.error("❌ MongoDB Connection Error:", err));
 
-// --- ROUTES REGISTRATION ---
-app.use("/api/auth", authRoutes);
-app.use("/api/listings", listingRoutes);
+// --- ROUTES REGISTRATION WITH SPECIFIC RATE LIMITING ---
+app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/listings", searchLimiter, listingRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/inspections", inspectionRoutes);
-app.use("/api/payment", paymentRoutes);
-app.use("/api/upload", uploadRoutes);
+app.use("/api/payment", paymentLimiter, paymentRoutes);
+app.use("/api/upload", uploadLimiter, uploadRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/wishlist", wishlistRoutes);
@@ -139,9 +157,23 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/chatbot", chatbotRoutes);
 app.use("/api/logistics", logisticsRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/kyc", kycRoutes);
 app.use("/api/users", userRoutes);
 
-// Error Handling Middleware
+// Health Check Endpoint
+app.get("/health", async (req, res) => {
+  const cacheStats = await CacheService.getStats();
+  res.json({
+    status: "OK",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    cache: cacheStats ? "Connected" : "Disconnected",
+    database: mongoose.connection.readyState === 1 ? "Connected" : "Disconnected",
+  });
+});
+
+// Error Handling Middleware (Must be last)
+app.use(errorLogger);
 app.use((err: any, req: any, res: any, next: any) => {
   console.error(err.stack);
   res
@@ -149,11 +181,31 @@ app.use((err: any, req: any, res: any, next: any) => {
     .json({ success: false, message: "Server Error", error: err.message });
 });
 
+// Graceful Shutdown
+process.on("SIGTERM", async () => {
+  console.log("SIGTERM received, shutting down gracefully");
+  await CacheService.close();
+  await mongoose.connection.close();
+  httpServer.close(() => {
+    console.log("Process terminated");
+  });
+});
+
+process.on("SIGINT", async () => {
+  console.log("SIGINT received, shutting down gracefully");
+  await CacheService.close();
+  await mongoose.connection.close();
+  httpServer.close(() => {
+    console.log("Process terminated");
+  });
+});
+
 // Start SERVER
 if (require.main === module) {
   httpServer.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Swagger Docs available at http://localhost:${PORT}/api-docs`);
+    console.log(`Health Check available at http://localhost:${PORT}/health`);
     console.log(`Socket.io is ready`);
   });
 }

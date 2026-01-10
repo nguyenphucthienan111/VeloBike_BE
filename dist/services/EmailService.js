@@ -15,174 +15,250 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.EmailService = void 0;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 class EmailService {
-    static getTransporter() {
-        if (this.transporter)
-            return this.transporter;
-        const host = process.env.SMTP_HOST;
-        const port = process.env.SMTP_PORT
-            ? parseInt(process.env.SMTP_PORT, 10)
-            : undefined;
-        const user = process.env.SMTP_USER;
-        const pass = process.env.SMTP_PASS;
-        if (!host || !port || !user || !pass) {
-            // SMTP not configured — keep transporter null to indicate mock mode
-            return null;
-        }
-        this.transporter = nodemailer_1.default.createTransport({
-            host,
-            port,
-            secure: port === 465, // true for 465, false for other ports
-            auth: {
-                user,
-                pass,
-            },
-        });
-        return this.transporter;
-    }
     /**
-     * Send email. If SMTP configured in env, use Nodemailer. Otherwise fallback to console log (mock).
+     * Send verification email
      */
-    static sendEmail(options) {
+    static sendVerificationEmail(email, name, code) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                // Debug log to help trace why emails from Swagger requests may not be sent
-                console.log("EmailService.sendEmail invoked", {
-                    SMTP_HOST: process.env.SMTP_HOST,
-                    SMTP_PORT: process.env.SMTP_PORT,
-                    SMTP_USER: process.env.SMTP_USER ? "***" : undefined,
-                    transporterInitialized: !!this.transporter,
-                    to: options.to,
-                    subject: options.subject,
-                });
-                const transporter = this.getTransporter();
-                const from = `"${this.FROM_NAME}" <${this.FROM_EMAIL}>`;
-                if (!transporter) {
-                    // Mock mode
-                    console.log("[EMAIL MOCK]", {
-                        from,
-                        to: options.to,
-                        subject: options.subject,
-                        text: options.text,
-                        html: options.html,
-                    });
-                    return true;
-                }
-                const info = yield transporter.sendMail({
-                    from,
-                    to: options.to,
-                    subject: options.subject,
-                    text: options.text,
-                    html: options.html,
-                });
-                console.log("EmailService.sendMail result:", info && (info.messageId || info.response));
+                const mailOptions = {
+                    from: `"VeloBike" <${process.env.SMTP_USER}>`,
+                    to: email,
+                    subject: "Verify Your Email - VeloBike",
+                    html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Welcome to VeloBike!</h2>
+            <p>Hi ${name},</p>
+            <p>Thank you for registering with VeloBike. Please verify your email address using the code below:</p>
+            <div style="background: #f3f4f6; padding: 20px; text-align: center; margin: 20px 0;">
+              <h1 style="color: #1f2937; font-size: 32px; margin: 0;">${code}</h1>
+            </div>
+            <p>This code will expire in 10 minutes.</p>
+            <p>If you didn't create an account with VeloBike, please ignore this email.</p>
+            <hr style="margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 14px;">
+              Best regards,<br>
+              The VeloBike Team
+            </p>
+          </div>
+        `,
+                };
+                yield this.transporter.sendMail(mailOptions);
+                console.log(`Verification email sent to ${email}`);
                 return true;
             }
             catch (error) {
-                if (error instanceof Error) {
-                    console.error("Email sending error:", error.message);
-                }
-                else {
-                    console.error("Email sending error:", error);
-                }
+                console.error("Failed to send verification email:", error);
                 return false;
             }
         });
     }
-    static sendOrderConfirmation(buyerEmail, orderId, orderDetails) {
+    /**
+     * Send password reset email
+     */
+    static sendPasswordResetEmail(email, name, code) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a;
-            const subject = `Xác nhận đơn hàng #${orderId}`;
-            const html = `
-      <h2>Xác nhận đơn hàng</h2>
-      <p>Cảm ơn bạn đã đặt hàng tại VeloBike!</p>
-      <p><strong>Mã đơn hàng:</strong> ${orderId}</p>
-      <p><strong>Tổng tiền:</strong> ${(_a = orderDetails.totalAmount) === null || _a === void 0 ? void 0 : _a.toLocaleString("vi-VN")} VND</p>
-      <p>Chúng tôi sẽ thông báo cho bạn khi đơn hàng được xử lý.</p>
-    `;
-            return this.sendEmail({ to: buyerEmail, subject, html });
+            try {
+                const mailOptions = {
+                    from: `"VeloBike" <${process.env.SMTP_USER}>`,
+                    to: email,
+                    subject: "Password Reset - VeloBike",
+                    html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #dc2626;">Password Reset Request</h2>
+            <p>Hi ${name},</p>
+            <p>We received a request to reset your password. Use the code below to reset your password:</p>
+            <div style="background: #fef2f2; padding: 20px; text-align: center; margin: 20px 0; border: 1px solid #fecaca;">
+              <h1 style="color: #dc2626; font-size: 32px; margin: 0;">${code}</h1>
+            </div>
+            <p>This code will expire in 15 minutes.</p>
+            <p>If you didn't request a password reset, please ignore this email or contact support if you have concerns.</p>
+            <hr style="margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 14px;">
+              Best regards,<br>
+              The VeloBike Team
+            </p>
+          </div>
+        `,
+                };
+                yield this.transporter.sendMail(mailOptions);
+                console.log(`Password reset email sent to ${email}`);
+                return true;
+            }
+            catch (error) {
+                console.error("Failed to send password reset email:", error);
+                return false;
+            }
         });
     }
-    static sendPaymentConfirmation(buyerEmail, orderId, amount) {
+    /**
+     * Send notification email
+     */
+    static sendNotificationEmail(email, name, title, message) {
         return __awaiter(this, void 0, void 0, function* () {
-            const subject = `Xác nhận thanh toán đơn hàng #${orderId}`;
-            const html = `
-      <h2>Thanh toán thành công</h2>
-      <p>Đơn hàng #${orderId} của bạn đã được thanh toán thành công.</p>
-      <p><strong>Số tiền:</strong> ${amount.toLocaleString("vi-VN")} VND</p>
-      <p>Đơn hàng đang được kiểm định. Chúng tôi sẽ thông báo kết quả sớm nhất.</p>
-    `;
-            return this.sendEmail({ to: buyerEmail, subject, html });
+            try {
+                const mailOptions = {
+                    from: `"VeloBike" <${process.env.SMTP_USER}>`,
+                    to: email,
+                    subject: `${title} - VeloBike`,
+                    html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">${title}</h2>
+            <p>Hi ${name},</p>
+            <p>${message}</p>
+            <p>You can check your account for more details.</p>
+            <hr style="margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 14px;">
+              Best regards,<br>
+              The VeloBike Team
+            </p>
+          </div>
+        `,
+                };
+                yield this.transporter.sendMail(mailOptions);
+                console.log(`Notification email sent to ${email}: ${title}`);
+                return true;
+            }
+            catch (error) {
+                console.error("Failed to send notification email:", error);
+                return false;
+            }
         });
     }
-    static sendInspectionResult(buyerEmail, sellerEmail, orderId, verdict, score) {
+    /**
+     * Send order confirmation email
+     */
+    static sendOrderConfirmationEmail(email, name, orderId, itemName, amount) {
         return __awaiter(this, void 0, void 0, function* () {
-            const subject = `Kết quả kiểm định đơn hàng #${orderId}`;
-            const html = `
-      <h2>Kết quả kiểm định</h2>
-      <p>Đơn hàng #${orderId} đã hoàn tất kiểm định.</p>
-      <p><strong>Kết quả:</strong> ${verdict === "PASSED"
-                ? "✅ ĐẠT"
-                : verdict === "FAILED"
-                    ? "❌ KHÔNG ĐẠT"
-                    : "⚠️ CẦN ĐIỀU CHỈNH"}</p>
-      <p><strong>Điểm số:</strong> ${score}/10</p>
-      ${verdict === "PASSED"
-                ? "<p>Xe đã được phê duyệt và sẽ được vận chuyển sớm.</p>"
-                : ""}
-      ${verdict === "FAILED"
-                ? "<p>Xe không đạt yêu cầu. Tiền sẽ được hoàn lại.</p>"
-                : ""}
-    `;
-            yield this.sendEmail({ to: buyerEmail, subject, html });
-            yield this.sendEmail({ to: sellerEmail, subject, html });
-            return true;
+            try {
+                const mailOptions = {
+                    from: `"VeloBike" <${process.env.SMTP_USER}>`,
+                    to: email,
+                    subject: "Order Confirmation - VeloBike",
+                    html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #059669;">Order Confirmed!</h2>
+            <p>Hi ${name},</p>
+            <p>Thank you for your order. Here are the details:</p>
+            <div style="background: #f0fdf4; padding: 20px; margin: 20px 0; border: 1px solid #bbf7d0;">
+              <h3 style="margin: 0 0 10px 0;">Order #${orderId}</h3>
+              <p><strong>Item:</strong> ${itemName}</p>
+              <p><strong>Amount:</strong> ${amount.toLocaleString()} VND</p>
+            </div>
+            <p>We'll notify you once your order is processed and ready for inspection.</p>
+            <hr style="margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 14px;">
+              Best regards,<br>
+              The VeloBike Team
+            </p>
+          </div>
+        `,
+                };
+                yield this.transporter.sendMail(mailOptions);
+                console.log(`Order confirmation email sent to ${email}`);
+                return true;
+            }
+            catch (error) {
+                console.error("Failed to send order confirmation email:", error);
+                return false;
+            }
         });
     }
-    static sendOrderShipped(buyerEmail, orderId, trackingNumber) {
+    /**
+     * Send KYC status email
+     */
+    static sendKycStatusEmail(email, name, status, note) {
         return __awaiter(this, void 0, void 0, function* () {
-            const subject = `Đơn hàng #${orderId} đã được gửi`;
-            const html = `
-      <h2>Đơn hàng đã được gửi</h2>
-      <p>Đơn hàng #${orderId} của bạn đã được gửi đi.</p>
-      ${trackingNumber
-                ? `<p><strong>Mã vận đơn:</strong> ${trackingNumber}</p>`
-                : ""}
-      <p>Bạn sẽ nhận được hàng trong vòng 3-5 ngày làm việc.</p>
-    `;
-            return this.sendEmail({ to: buyerEmail, subject, html });
+            try {
+                const isApproved = status === "VERIFIED";
+                const color = isApproved ? "#059669" : "#dc2626";
+                const bgColor = isApproved ? "#f0fdf4" : "#fef2f2";
+                const borderColor = isApproved ? "#bbf7d0" : "#fecaca";
+                const mailOptions = {
+                    from: `"VeloBike" <${process.env.SMTP_USER}>`,
+                    to: email,
+                    subject: `KYC ${status} - VeloBike`,
+                    html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: ${color};">KYC ${status}</h2>
+            <p>Hi ${name},</p>
+            <p>Your identity verification has been ${status.toLowerCase()}.</p>
+            <div style="background: ${bgColor}; padding: 20px; margin: 20px 0; border: 1px solid ${borderColor};">
+              <h3 style="margin: 0 0 10px 0; color: ${color};">Status: ${status}</h3>
+              ${note ? `<p><strong>Note:</strong> ${note}</p>` : ""}
+            </div>
+            ${isApproved
+                        ? "<p>You can now start selling on VeloBike!</p>"
+                        : "<p>Please contact support if you have any questions about this decision.</p>"}
+            <hr style="margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 14px;">
+              Best regards,<br>
+              The VeloBike Team
+            </p>
+          </div>
+        `,
+                };
+                yield this.transporter.sendMail(mailOptions);
+                console.log(`KYC status email sent to ${email}: ${status}`);
+                return true;
+            }
+            catch (error) {
+                console.error("Failed to send KYC status email:", error);
+                return false;
+            }
         });
     }
-    static sendOrderCompleted(buyerEmail, sellerEmail, orderId) {
+    /**
+     * Send welcome email
+     */
+    static sendWelcomeEmail(email, name) {
         return __awaiter(this, void 0, void 0, function* () {
-            const subject = `Đơn hàng #${orderId} đã hoàn tất`;
-            const html = `
-      <h2>Đơn hàng đã hoàn tất</h2>
-      <p>Đơn hàng #${orderId} đã được hoàn tất thành công.</p>
-      <p>Cảm ơn bạn đã sử dụng dịch vụ của VeloBike!</p>
-    `;
-            yield this.sendEmail({ to: buyerEmail, subject, html });
-            yield this.sendEmail({ to: sellerEmail, subject, html });
-            return true;
-        });
-    }
-    static sendDisputeNotification(adminEmail, disputeId, orderId, reason) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const subject = `Có tranh chấp mới #${disputeId}`;
-            const html = `
-      <h2>Tranh chấp mới</h2>
-      <p>Có một tranh chấp mới cần xử lý.</p>
-      <p><strong>Mã tranh chấp:</strong> ${disputeId}</p>
-      <p><strong>Mã đơn hàng:</strong> ${orderId}</p>
-      <p><strong>Lý do:</strong> ${reason}</p>
-      <p>Vui lòng đăng nhập vào admin panel để xử lý.</p>
-    `;
-            return this.sendEmail({ to: adminEmail, subject, html });
+            try {
+                const mailOptions = {
+                    from: `"VeloBike" <${process.env.SMTP_USER}>`,
+                    to: email,
+                    subject: "Welcome to VeloBike!",
+                    html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Welcome to VeloBike!</h2>
+            <p>Hi ${name},</p>
+            <p>Welcome to VeloBike - the premier marketplace for buying and selling sports bicycles!</p>
+            <p>Here's what you can do:</p>
+            <ul>
+              <li>🚲 Browse thousands of quality bikes</li>
+              <li>💬 Chat directly with sellers</li>
+              <li>🔍 Get professional inspections</li>
+              <li>💳 Secure escrow payments</li>
+              <li>⭐ Build your reputation</li>
+            </ul>
+            <p>Ready to start your cycling journey? Explore our marketplace now!</p>
+            <hr style="margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 14px;">
+              Happy cycling,<br>
+              The VeloBike Team
+            </p>
+          </div>
+        `,
+                };
+                yield this.transporter.sendMail(mailOptions);
+                console.log(`Welcome email sent to ${email}`);
+                return true;
+            }
+            catch (error) {
+                console.error("Failed to send welcome email:", error);
+                return false;
+            }
         });
     }
 }
 exports.EmailService = EmailService;
-EmailService.FROM_EMAIL = process.env.FROM_EMAIL || "noreply@velobike.vn";
-EmailService.FROM_NAME = process.env.FROM_NAME || "VeloBike";
-// Lazily created transporter
-EmailService.transporter = null;
+EmailService.transporter = nodemailer_1.default.createTransport({
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: parseInt(process.env.SMTP_PORT || "587"),
+    secure: false, // true for 465, false for other ports
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+    },
+});
 //# sourceMappingURL=EmailService.js.map
