@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 export class ChatbotService {
   // Initialize Gemini AI - make sure dotenv.config() runs before this
   private static genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-  private static model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  private static model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
   /**
    * VeloBike context for AI responses
