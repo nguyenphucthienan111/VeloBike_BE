@@ -1,21 +1,9 @@
 import request from "supertest";
 import app from "../app";
 import { User } from "../models/User";
-import mongoose from "mongoose";
+import "./setup"; // Import test setup
 
 describe("Authentication Endpoints", () => {
-  beforeAll(async () => {
-    // Connect to test database
-    const MONGO_URI = process.env.MONGO_TEST_URI || "mongodb://localhost:27017/velobike_test";
-    await mongoose.connect(MONGO_URI);
-  });
-
-  afterAll(async () => {
-    // Clean up and close connection
-    await User.deleteMany({});
-    await mongoose.connection.close();
-  });
-
   beforeEach(async () => {
     // Clean up before each test
     await User.deleteMany({});

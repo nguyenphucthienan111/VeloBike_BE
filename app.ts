@@ -50,8 +50,10 @@ const io = new Server(httpServer, {
 
 const PORT = process.env.PORT || 5000;
 
-// Initialize Cache Service
-CacheService.init().catch(console.error);
+// Initialize Cache Service only if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+  CacheService.init().catch(console.error);
+}
 
 // Ensure uploads directory exists (Task B4 Fix)
 const uploadDir = path.join(__dirname, "uploads");
@@ -72,8 +74,10 @@ app.use(requestLogger);
 app.use(performanceMonitor);
 app.use(apiAnalytics);
 
-// General Rate Limiting
-app.use(generalLimiter);
+// General Rate Limiting (skip in test environment)
+if (process.env.NODE_ENV !== 'test') {
+  app.use(generalLimiter);
+}
 
 // Inject Socket.io into Request object so Controllers can use it
 app.use((req: any, res, next) => {
@@ -135,20 +139,27 @@ const swaggerOptions = {
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 app.use("/api-docs", swaggerUi.serve as any, swaggerUi.setup(swaggerDocs));
 
-// Database Connection
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/velobike";
-mongoose
-  .connect(MONGO_URI)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err: any) => console.error("❌ MongoDB Connection Error:", err));
+// Database Connection (skip in test environment)
+if (process.env.NODE_ENV !== 'test') {
+  const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/velobike";
+  mongoose
+    .connect(MONGO_URI)
+    .then(() => console.log("✅ MongoDB Connected"))
+    .catch((err: any) => console.error("❌ MongoDB Connection Error:", err));
+}
 
 // --- ROUTES REGISTRATION WITH SPECIFIC RATE LIMITING ---
-app.use("/api/auth", authLimiter, authRoutes);
-app.use("/api/listings", searchLimiter, listingRoutes);
+const authLimiterMiddleware = process.env.NODE_ENV === 'test' ? [] : [authLimiter];
+const searchLimiterMiddleware = process.env.NODE_ENV === 'test' ? [] : [searchLimiter];
+const paymentLimiterMiddleware = process.env.NODE_ENV === 'test' ? [] : [paymentLimiter];
+const uploadLimiterMiddleware = process.env.NODE_ENV === 'test' ? [] : [uploadLimiter];
+
+app.use("/api/auth", ...authLimiterMiddleware, authRoutes);
+app.use("/api/listings", ...searchLimiterMiddleware, listingRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/inspections", inspectionRoutes);
-app.use("/api/payment", paymentLimiter, paymentRoutes);
-app.use("/api/upload", uploadLimiter, uploadRoutes);
+app.use("/api/payment", ...paymentLimiterMiddleware, paymentRoutes);
+app.use("/api/upload", ...uploadLimiterMiddleware, uploadRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/wishlist", wishlistRoutes);

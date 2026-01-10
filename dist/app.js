@@ -57,8 +57,10 @@ const io = new socket_io_1.Server(httpServer, {
     },
 });
 const PORT = process.env.PORT || 5000;
-// Initialize Cache Service
-CacheService_1.CacheService.init().catch(console.error);
+// Initialize Cache Service only if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+    CacheService_1.CacheService.init().catch(console.error);
+}
 // Ensure uploads directory exists (Task B4 Fix)
 const uploadDir = path_1.default.join(__dirname, "uploads");
 if (!fs_1.default.existsSync(uploadDir)) {
@@ -75,8 +77,10 @@ app.use(securityMiddleware_1.sanitizeInput); // Sanitize inputs
 app.use(requestLoggerMiddleware_1.requestLogger);
 app.use(requestLoggerMiddleware_1.performanceMonitor);
 app.use(requestLoggerMiddleware_1.apiAnalytics);
-// General Rate Limiting
-app.use(rateLimitMiddleware_1.generalLimiter);
+// General Rate Limiting (skip in test environment)
+if (process.env.NODE_ENV !== 'test') {
+    app.use(rateLimitMiddleware_1.generalLimiter);
+}
 // Inject Socket.io into Request object so Controllers can use it
 app.use((req, res, next) => {
     req.io = io;
@@ -128,19 +132,25 @@ const swaggerOptions = {
 };
 const swaggerDocs = (0, swagger_jsdoc_1.default)(swaggerOptions);
 app.use("/api-docs", swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(swaggerDocs));
-// Database Connection
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/velobike";
-mongoose_1.default
-    .connect(MONGO_URI)
-    .then(() => console.log("✅ MongoDB Connected"))
-    .catch((err) => console.error("❌ MongoDB Connection Error:", err));
+// Database Connection (skip in test environment)
+if (process.env.NODE_ENV !== 'test') {
+    const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/velobike";
+    mongoose_1.default
+        .connect(MONGO_URI)
+        .then(() => console.log("✅ MongoDB Connected"))
+        .catch((err) => console.error("❌ MongoDB Connection Error:", err));
+}
 // --- ROUTES REGISTRATION WITH SPECIFIC RATE LIMITING ---
-app.use("/api/auth", rateLimitMiddleware_1.authLimiter, authRoutes_1.authRoutes);
-app.use("/api/listings", rateLimitMiddleware_1.searchLimiter, listingRoutes_1.listingRoutes);
+const authLimiterMiddleware = process.env.NODE_ENV === 'test' ? [] : [rateLimitMiddleware_1.authLimiter];
+const searchLimiterMiddleware = process.env.NODE_ENV === 'test' ? [] : [rateLimitMiddleware_1.searchLimiter];
+const paymentLimiterMiddleware = process.env.NODE_ENV === 'test' ? [] : [rateLimitMiddleware_1.paymentLimiter];
+const uploadLimiterMiddleware = process.env.NODE_ENV === 'test' ? [] : [rateLimitMiddleware_1.uploadLimiter];
+app.use("/api/auth", ...authLimiterMiddleware, authRoutes_1.authRoutes);
+app.use("/api/listings", ...searchLimiterMiddleware, listingRoutes_1.listingRoutes);
 app.use("/api/orders", orderRoutes_1.orderRoutes);
 app.use("/api/inspections", inspectionRoutes_1.inspectionRoutes);
-app.use("/api/payment", rateLimitMiddleware_1.paymentLimiter, paymentRoutes_1.paymentRoutes);
-app.use("/api/upload", rateLimitMiddleware_1.uploadLimiter, uploadRoutes_1.uploadRoutes);
+app.use("/api/payment", ...paymentLimiterMiddleware, paymentRoutes_1.paymentRoutes);
+app.use("/api/upload", ...uploadLimiterMiddleware, uploadRoutes_1.uploadRoutes);
 app.use("/api/reviews", reviewRoutes_1.reviewRoutes);
 app.use("/api/messages", messageRoutes_1.messageRoutes);
 app.use("/api/wishlist", wishlistRoutes_1.wishlistRoutes);

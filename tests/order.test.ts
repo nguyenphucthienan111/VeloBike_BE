@@ -5,6 +5,7 @@ import { Listing } from "../models/Listing";
 import { Order, OrderStatus } from "../models/Order";
 import { OrderService } from "../services/OrderService";
 import mongoose from "mongoose";
+import "./setup"; // Import test setup
 
 describe("Order Management", () => {
   let buyerToken: string;
@@ -16,18 +17,6 @@ describe("Order Management", () => {
   let inspectorId: string;
   let listingId: string;
   let orderId: string;
-
-  beforeAll(async () => {
-    const MONGO_URI = process.env.MONGO_TEST_URI || "mongodb://localhost:27017/velobike_test";
-    await mongoose.connect(MONGO_URI);
-  });
-
-  afterAll(async () => {
-    await User.deleteMany({});
-    await Listing.deleteMany({});
-    await Order.deleteMany({});
-    await mongoose.connection.close();
-  });
 
   beforeEach(async () => {
     // Clean up
@@ -91,6 +80,11 @@ describe("Order Management", () => {
         year: 2022,
         size: "54",
         condition: "GOOD",
+      },
+      specs: {
+        frameMaterial: "Carbon",
+        brakeType: "Disc",
+        groupset: "Shimano 105",
       },
       pricing: {
         amount: 50000000,

@@ -9,10 +9,16 @@ export class CacheService {
    */
   static async init(): Promise<void> {
     try {
-      this.client = createClient({
+      const redisConfig: any = {
         url: process.env.REDIS_URL || "redis://localhost:6379",
-        password: process.env.REDIS_PASSWORD,
-      });
+      };
+
+      // Only add password if it exists and is not empty
+      if (process.env.REDIS_PASSWORD && process.env.REDIS_PASSWORD.trim() !== '') {
+        redisConfig.password = process.env.REDIS_PASSWORD;
+      }
+
+      this.client = createClient(redisConfig);
 
       this.client.on("error", (err) => {
         console.error("Redis Client Error:", err);

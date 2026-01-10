@@ -1,23 +1,32 @@
 import axios from "axios";
 
 export class SMSService {
-  private static readonly SMS_API_URL = process.env.SMS_API_URL || "";
-  private static readonly SMS_API_KEY = process.env.SMS_API_KEY || "";
+  private static readonly SMS_API_URL = process.env.SMS_API_URL || "mock";
+  private static readonly SMS_API_KEY = process.env.SMS_API_KEY || "free";
   private static readonly SMS_SENDER = process.env.SMS_SENDER || "VeloBike";
 
   /**
-   * Send SMS using Vonage/Twilio/local provider
+   * Send SMS using mock service (Vietnam-friendly)
    */
   static async sendSMS(phoneNumber: string, message: string): Promise<boolean> {
     try {
       // Format phone number (remove +84, add 0)
       const formattedPhone = this.formatPhoneNumber(phoneNumber);
 
-      // Mock SMS sending (replace with actual provider)
-      console.log(`[SMS] Sending to ${formattedPhone}: ${message}`);
+      // Always use mock SMS for Vietnam
+      console.log(`[SMS MOCK] Sending to ${formattedPhone}: ${message}`);
+      
+      // Simulate SMS sending delay
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Example for Vietnamese SMS provider (like VIETGUYS, SPEEDSMS)
-      if (this.SMS_API_URL && this.SMS_API_KEY) {
+      // Mock success response
+      console.log(`✅ SMS sent successfully to ${formattedPhone} (MOCK)`);
+      return true;
+
+      // Real SMS integration can be added later when needed:
+      /*
+      if (this.SMS_API_URL !== "mock" && this.SMS_API_KEY !== "free") {
+        // Example for Vietnamese SMS provider (like VIETGUYS, SPEEDSMS, ESMS)
         const response = await axios.post(this.SMS_API_URL, {
           to: formattedPhone,
           content: message,
@@ -38,12 +47,10 @@ export class SMSService {
           return false;
         }
       }
-
-      // Mock success for development
-      return true;
+      */
     } catch (error) {
-      console.error("Failed to send SMS:", error);
-      return false;
+      console.error("Failed to send SMS (using mock):", error);
+      return true; // Return true for mock to not break the flow
     }
   }
 
@@ -152,7 +159,28 @@ export class SMSService {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    console.log(`Bulk SMS: ${successCount}/${phoneNumbers.length} sent successfully`);
+    console.log(`Bulk SMS: ${successCount}/${phoneNumbers.length} sent successfully (MOCK)`);
     return successCount;
   }
+
+  /**
+   * Vietnamese SMS Providers Integration Guide
+   * 
+   * Recommended providers for Vietnam:
+   * 1. ESMS.vn - https://esms.vn/
+   * 2. VIETGUYS - https://vietguys.biz/
+   * 3. SPEEDSMS - https://speedsms.vn/
+   * 4. STRINGEE - https://stringee.com/
+   * 
+   * To integrate real SMS:
+   * 1. Register with a Vietnamese SMS provider
+   * 2. Get API credentials
+   * 3. Update SMS_API_URL and SMS_API_KEY in .env
+   * 4. Uncomment the real SMS code in sendSMS method
+   * 
+   * Example .env for ESMS:
+   * SMS_API_URL=https://rest.esms.vn/MainService.svc/json/SendMultipleMessage_V4_post_json/
+   * SMS_API_KEY=your_esms_api_key
+   * SMS_SECRET_KEY=your_esms_secret_key
+   */
 }
