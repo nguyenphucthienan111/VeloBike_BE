@@ -218,5 +218,30 @@ exports.validationRules = {
             .isIn(["DRAFT", "PUBLISHED", "IN_INSPECTION", "SOLD"])
             .withMessage("Invalid listing status"),
     ],
+    // Price Alert validation
+    createPriceAlert: [
+        (0, express_validator_1.body)("listingId")
+            .isMongoId()
+            .withMessage("Valid listing ID is required"),
+        (0, express_validator_1.body)("targetPrice")
+            .isNumeric()
+            .withMessage("Target price must be a number")
+            .isFloat({ min: 0 })
+            .withMessage("Target price must be positive"),
+    ],
+    // Saved Search validation
+    createSavedSearch: [
+        (0, express_validator_1.body)("name")
+            .trim()
+            .isLength({ min: 1, max: 100 })
+            .withMessage("Search name must be 1-100 characters"),
+        (0, express_validator_1.body)("query")
+            .isObject()
+            .withMessage("Query must be an object"),
+        (0, express_validator_1.body)("alertsEnabled")
+            .optional()
+            .isBoolean()
+            .withMessage("Alerts enabled must be boolean"),
+    ],
 };
 //# sourceMappingURL=validationMiddleware.js.map

@@ -40,6 +40,9 @@ export interface IOrder extends MongooseDocument {
     actorId: Types.ObjectId; // Who triggered this?
     note?: string;
   }>;
+
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const OrderSchema = new Schema<IOrder>(

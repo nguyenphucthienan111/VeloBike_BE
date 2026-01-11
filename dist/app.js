@@ -30,6 +30,7 @@ const securityMiddleware_1 = require("./middleware/securityMiddleware");
 const requestLoggerMiddleware_1 = require("./middleware/requestLoggerMiddleware");
 // Import Services
 const CacheService_1 = require("./services/CacheService");
+const AlertService_1 = require("./services/AlertService");
 // Import Routes
 const authRoutes_1 = require("./routes/authRoutes");
 const listingRoutes_1 = require("./routes/listingRoutes");
@@ -46,6 +47,11 @@ const chatbotRoutes_1 = require("./routes/chatbotRoutes");
 const logisticsRoutes_1 = require("./routes/logisticsRoutes");
 const notificationRoutes_1 = require("./routes/notificationRoutes");
 const kycRoutes_1 = require("./routes/kycRoutes");
+const dashboardRoutes_1 = require("./routes/dashboardRoutes");
+const recommendationRoutes_1 = require("./routes/recommendationRoutes");
+const alertRoutes_1 = require("./routes/alertRoutes");
+const fraudRoutes_1 = require("./routes/fraudRoutes");
+const bulkRoutes_1 = require("./routes/bulkRoutes");
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 // Initialize App & Socket.io
 const app = (0, express_1.default)();
@@ -60,6 +66,8 @@ const PORT = process.env.PORT || 5000;
 // Initialize Cache Service only if not in test environment
 if (process.env.NODE_ENV !== 'test') {
     CacheService_1.CacheService.init().catch(console.error);
+    // Start alert processing
+    AlertService_1.AlertService.startAlertProcessing();
 }
 // Ensure uploads directory exists (Task B4 Fix)
 const uploadDir = path_1.default.join(__dirname, "uploads");
@@ -161,6 +169,11 @@ app.use("/api/logistics", logisticsRoutes_1.logisticsRoutes);
 app.use("/api/notifications", notificationRoutes_1.notificationRoutes);
 app.use("/api/kyc", kycRoutes_1.kycRoutes);
 app.use("/api/users", userRoutes_1.default);
+app.use("/api/dashboard", dashboardRoutes_1.dashboardRoutes);
+app.use("/api/recommendations", recommendationRoutes_1.recommendationRoutes);
+app.use("/api/alerts", alertRoutes_1.alertRoutes);
+app.use("/api/fraud", fraudRoutes_1.fraudRoutes);
+app.use("/api/bulk", bulkRoutes_1.bulkRoutes);
 // Health Check Endpoint
 app.get("/health", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const cacheStats = yield CacheService_1.CacheService.getStats();

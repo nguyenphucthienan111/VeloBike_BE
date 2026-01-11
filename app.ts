@@ -19,6 +19,7 @@ import { requestLogger, errorLogger, performanceMonitor, apiAnalytics } from "./
 
 // Import Services
 import { CacheService } from "./services/CacheService";
+import { AlertService } from "./services/AlertService";
 
 // Import Routes
 import { authRoutes } from "./routes/authRoutes";
@@ -36,6 +37,11 @@ import { chatbotRoutes } from "./routes/chatbotRoutes";
 import { logisticsRoutes } from "./routes/logisticsRoutes";
 import { notificationRoutes } from "./routes/notificationRoutes";
 import { kycRoutes } from "./routes/kycRoutes";
+import { dashboardRoutes } from "./routes/dashboardRoutes";
+import { recommendationRoutes } from "./routes/recommendationRoutes";
+import { alertRoutes } from "./routes/alertRoutes";
+import { fraudRoutes } from "./routes/fraudRoutes";
+import { bulkRoutes } from "./routes/bulkRoutes";
 import userRoutes from "./routes/userRoutes";
 
 // Initialize App & Socket.io
@@ -53,6 +59,9 @@ const PORT = process.env.PORT || 5000;
 // Initialize Cache Service only if not in test environment
 if (process.env.NODE_ENV !== 'test') {
   CacheService.init().catch(console.error);
+  
+  // Start alert processing
+  AlertService.startAlertProcessing();
 }
 
 // Ensure uploads directory exists (Task B4 Fix)
@@ -170,6 +179,11 @@ app.use("/api/logistics", logisticsRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/kyc", kycRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/recommendations", recommendationRoutes);
+app.use("/api/alerts", alertRoutes);
+app.use("/api/fraud", fraudRoutes);
+app.use("/api/bulk", bulkRoutes);
 
 // Health Check Endpoint
 app.get("/health", async (req, res) => {
