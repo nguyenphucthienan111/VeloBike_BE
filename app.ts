@@ -42,7 +42,7 @@ import { recommendationRoutes } from "./routes/recommendationRoutes";
 import { alertRoutes } from "./routes/alertRoutes";
 import { fraudRoutes } from "./routes/fraudRoutes";
 import { bulkRoutes } from "./routes/bulkRoutes";
-import userRoutes from "./routes/userRoutes";
+import { reportRoutes } from "./routes/reportRoutes";
 
 // Initialize App & Socket.io
 const app = express();
@@ -184,6 +184,7 @@ app.use("/api/recommendations", recommendationRoutes);
 app.use("/api/alerts", alertRoutes);
 app.use("/api/fraud", fraudRoutes);
 app.use("/api/bulk", bulkRoutes);
+app.use("/api/reports", reportRoutes);
 
 // Health Check Endpoint
 app.get("/health", async (req, res) => {

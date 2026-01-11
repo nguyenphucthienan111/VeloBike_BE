@@ -296,6 +296,31 @@ listingRoutes.get("/my-listings", protect, ListingController.getMyListings as an
 
 /**
  * @swagger
+ * /api/listings/{id}/submit-approval:
+ *   put:
+ *     summary: Submit listing for admin approval (SRS BikeMarket requirement)
+ *     tags: [Listings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Listing ID
+ *     responses:
+ *       200:
+ *         description: Listing submitted for approval
+ *       400:
+ *         description: Invalid listing status for submission
+ *       403:
+ *         description: Not authorized
+ */
+listingRoutes.put("/:id/submit-approval", protect, ListingController.submitForApproval as any);
+
+/**
+ * @swagger
  * /api/listings/{id}:
  *   put:
  *     summary: Update a listing (Seller only)

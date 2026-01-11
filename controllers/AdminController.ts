@@ -181,21 +181,31 @@ export class AdminController {
   }
 
   /**
-   * Approve/Reject listing
+   * Approve/Reject listing (SRS BikeMarket requirement)
    * PUT /api/admin/listings/:listingId/status
    */
   static async updateListingStatus(req: Request, res: Response) {
     try {
       const { listingId } = req.params;
-      const { status, note } = req.body;
+      const { status, rejectionReason } = req.body;
 
-      if (!Object.values(ListingStatus).includes(status)) {
-        return res.status(400).json({ success: false, message: "Invalid listing status" });
+      // SRS BikeMarket: Admin can approve (PUBLISHED) or reject (REJECTED)
+      const allowedStatuses = ["PUBLISHED", "REJECTED"];
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Invalid status. Admin can only PUBLISHED or REJECTED listings per SRS BikeMarket" 
+        });
+      }
+
+      const updateData: any = { status };
+      if (status === "REJECTED" && rejectionReason) {
+        updateData.rejectionReason = rejectionReason;
       }
 
       const listing = await Listing.findByIdAndUpdate(
         listingId,
-        { status },
+        updateData,
         { new: true }
       ).populate("sellerId", "fullName email");
 
@@ -203,11 +213,15 @@ export class AdminController {
         return res.status(404).json({ success: false, message: "Listing not found" });
       }
 
-      // TODO: Send notification to seller about listing status
+      // TODO: Send notification to seller about listing approval/rejection
+
+      const message = status === "PUBLISHED" 
+        ? "Listing approved and published per SRS BikeMarket workflow"
+        : "Listing rejected per SRS BikeMarket workflow";
 
       res.status(200).json({
         success: true,
-        message: "Listing status updated",
+        message,
         data: listing,
       });
     } catch (error: any) {

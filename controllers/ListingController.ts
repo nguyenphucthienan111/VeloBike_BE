@@ -63,14 +63,63 @@ export class ListingController {
       const newListing = new Listing({
         ...req.body,
         sellerId: sellerId, // Force override sellerId from token
-        status: "DRAFT", // Default to Draft until approved/published
+        status: "DRAFT", // Default to Draft until seller submits for approval
       });
 
       await newListing.save();
 
-      res.status(201).json({ success: true, data: newListing });
+      res.status(201).json({ 
+        success: true, 
+        data: newListing,
+        message: "Listing created as draft. Use PUT /api/listings/:id to submit for approval."
+      });
     } catch (error: any) {
       res.status(400).json({ success: false, message: error.message });
+    }
+  }
+
+  // PUT /api/listings/:id/submit-approval
+  // Submit listing for admin approval (SRS requirement)
+  static async submitForApproval(req: any, res: any) {
+    try {
+      const { id } = req.params;
+      const sellerId = req.user?.id;
+
+      if (!sellerId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const listing = await Listing.findById(id);
+      if (!listing) {
+        return res.status(404).json({ success: false, message: "Listing not found" });
+      }
+
+      // Check ownership
+      if (listing.sellerId.toString() !== sellerId) {
+        return res.status(403).json({ success: false, message: "Not authorized to update this listing" });
+      }
+
+      // Only allow submission from DRAFT status
+      if (listing.status !== "DRAFT") {
+        return res.status(400).json({ 
+          success: false, 
+          message: `Cannot submit listing with status ${listing.status} for approval` 
+        });
+      }
+
+      // Update status to PENDING_APPROVAL per SRS BikeMarket
+      listing.status = "PENDING_APPROVAL";
+      await listing.save();
+
+      // TODO: Send notification to admin about new listing pending approval
+
+      res.json({ 
+        success: true, 
+        data: listing,
+        message: "Listing submitted for admin approval per SRS BikeMarket workflow"
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 

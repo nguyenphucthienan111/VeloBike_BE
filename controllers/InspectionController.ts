@@ -7,8 +7,22 @@ import { UserRole } from "../models/User";
 import { AuthRequest } from "../middleware/authMiddleware";
 
 /**
+ * Grade Mapping theo SRS BikeMarket
+ * A: 8.5-10 (Excellent - Không lỗi + Ngoại hình xước < 5%)
+ * B: 6.5-8.4 (Good - Có lỗi hao mòn nhẹ nhưng khung sườn tốt)  
+ * C: 4.0-6.4 (Fair - Cần bảo dưỡng lớn)
+ * D: 1.0-3.9 (Poor - Không đạt chuẩn an toàn)
+ */
+function scoreToGrade(score: number): string {
+  if (score >= 8.5) return "A";
+  if (score >= 6.5) return "B"; 
+  if (score >= 4.0) return "C";
+  return "D";
+}
+
+/**
  * Condition Scoring Algorithm
- * Tính điểm tổng thể (1-10) dựa trên checkpoints
+ * Tính điểm tổng thể (1-10) dựa trên checkpoints theo SRS BikeMarket
  */
 function calculateConditionScore(checkpoints: any[]): number {
   if (!checkpoints || checkpoints.length === 0) return 5.0;
@@ -396,11 +410,14 @@ export class InspectionController {
         return;
       }
 
-      // 2. Calculate overall score automatically if not provided
+      // 2. Calculate overall score and grade automatically
       let finalScore = overallScore;
       if (!finalScore || finalScore < 1 || finalScore > 10) {
         finalScore = calculateConditionScore(checkpoints);
       }
+
+      // Calculate grade according to SRS BikeMarket specification  
+      const finalGrade = scoreToGrade(finalScore);
 
       // 3. Auto-determine verdict if not provided or if score suggests different verdict
       let finalVerdict = overallVerdict;
@@ -424,13 +441,14 @@ export class InspectionController {
         }
       }
 
-      // 4. Save Inspection Report
+      // 4. Save Inspection Report with Grade
       const newInspection = new Inspection({
         orderId,
         inspectorId,
         checkpoints,
         overallVerdict: finalVerdict,
         overallScore: finalScore,
+        grade: finalGrade, // Add grade field according to SRS
         inspectorNote,
       });
       await newInspection.save();
@@ -473,10 +491,11 @@ export class InspectionController {
         data: {
           ...newInspection.toObject(),
           calculatedScore: finalScore,
+          calculatedGrade: finalGrade,
           calculatedVerdict: finalVerdict,
         },
         orderStatus: nextStatus,
-        message: `Inspection completed. Score: ${finalScore}/10, Verdict: ${finalVerdict}`,
+        message: `Inspection completed. Score: ${finalScore}/10, Grade: ${finalGrade}, Verdict: ${finalVerdict}`,
       });
     } catch (error: any) {
       res.status(500).json({ success: false, message: error.message });

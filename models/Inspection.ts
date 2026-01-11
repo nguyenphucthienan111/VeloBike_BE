@@ -5,6 +5,7 @@ export interface IInspection extends Document {
   inspectorId: mongoose.Types.ObjectId;
   overallVerdict: "PASSED" | "FAILED" | "SUGGEST_ADJUSTMENT";
   overallScore: number; // 1-10
+  grade: "A" | "B" | "C" | "D"; // SRS BikeMarket grade system
 
   checkpoints: Array<{
     component: string; // e.g., "Frame - Top Tube", "Rear Derailleur"
@@ -33,6 +34,11 @@ const InspectionSchema: Schema = new Schema(
       required: true,
     },
     overallScore: { type: Number, required: true, min: 1, max: 10 },
+    grade: { 
+      type: String, 
+      enum: ["A", "B", "C", "D"], 
+      required: true 
+    }, // SRS BikeMarket grade system
 
     checkpoints: [
       {

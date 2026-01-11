@@ -15,7 +15,9 @@ export enum BikeType {
 
 export enum ListingStatus {
   DRAFT = "DRAFT",
+  PENDING_APPROVAL = "PENDING_APPROVAL", // SRS requirement: Admin approval needed
   PUBLISHED = "PUBLISHED",
+  REJECTED = "REJECTED", // Admin rejected listing
   IN_INSPECTION = "IN_INSPECTION",
   SOLD = "SOLD",
 }
