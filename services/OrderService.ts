@@ -1,6 +1,7 @@
 import { Order, OrderStatus, IOrder } from "../models/Order";
 import { Listing } from "../models/Listing";
 import { User } from "../models/User";
+import { Transaction } from "../models/Transaction";
 import mongoose, { Types } from "mongoose";
 
 import { NotificationService } from "./NotificationService";
@@ -282,6 +283,25 @@ export class OrderService {
     const { itemPrice, platformFee, inspectionFee } = order.financials;
     const sellerPayout = itemPrice - platformFee;
 
+    // Create PAYMENT_RELEASE transaction for seller
+    await Transaction.create({
+      userId: order.sellerId,
+      type: "PAYMENT_RELEASE",
+      amount: sellerPayout,
+      status: "COMPLETED",
+      relatedOrderId: order._id,
+      description: `Payment released for order #${order._id}`,
+      metadata: {
+        escrowStatus: "RELEASED",
+        releasedAt: new Date(),
+        breakdown: {
+          itemPrice,
+          platformFee,
+          sellerReceived: sellerPayout,
+        },
+      },
+    });
+
     // Credit Seller
     await User.findByIdAndUpdate(order.sellerId, {
       $inc: { "wallet.balance": sellerPayout },
@@ -289,10 +309,42 @@ export class OrderService {
 
     // Credit Inspector (if applicable)
     if (order.inspectorId && inspectionFee > 0) {
+      // Create INSPECTION_FEE transaction for inspector
+      await Transaction.create({
+        userId: order.inspectorId,
+        type: "INSPECTION_FEE",
+        amount: inspectionFee,
+        status: "COMPLETED",
+        relatedOrderId: order._id,
+        relatedInspectionId: order.inspectorId, // Will be updated if we have inspection ID
+        description: `Inspection fee for order #${order._id}`,
+      });
+
       await User.findByIdAndUpdate(order.inspectorId, {
         $inc: { "wallet.balance": inspectionFee },
       });
     }
+
+    // Create PLATFORM_FEE transaction (for tracking)
+    await Transaction.create({
+      userId: order.sellerId, // Track against seller for reference
+      type: "PLATFORM_FEE",
+      amount: platformFee,
+      status: "COMPLETED",
+      relatedOrderId: order._id,
+      description: `Platform fee collected for order #${order._id}`,
+    });
+
+    // Update original PAYMENT_HOLD transaction metadata
+    await Transaction.findOneAndUpdate(
+      { relatedOrderId: order._id, type: "PAYMENT_HOLD" },
+      {
+        $set: {
+          "metadata.escrowStatus": "RELEASED",
+          "metadata.releasedAt": new Date(),
+        },
+      }
+    );
 
     // Note: Platform Fee and Shipping Fee are retained by the Platform (Company Account)
 

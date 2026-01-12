@@ -277,3 +277,115 @@ export class OrderController {
     }
   }
 }
+
+
+// Import Transaction model for escrow status
+import { Transaction } from "../models/Transaction";
+
+export class OrderEscrowController {
+  /**
+   * GET /api/orders/:id/escrow-status
+   * Get escrow status and transaction history for an order
+   */
+  static async getEscrowStatus(req: any, res: any) {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      const order = await Order.findById(id)
+        .populate("buyerId", "fullName")
+        .populate("sellerId", "fullName");
+
+      if (!order) {
+        return res.status(404).json({ success: false, message: "Order not found" });
+      }
+
+      // Check authorization
+      const isAuthorized =
+        userRole === UserRole.ADMIN ||
+        order.buyerId.toString() === userId ||
+        order.sellerId.toString() === userId;
+
+      if (!isAuthorized) {
+        return res.status(403).json({ success: false, message: "Not authorized" });
+      }
+
+      // Get all transactions related to this order
+      const transactions = await Transaction.find({ relatedOrderId: id })
+        .sort({ createdAt: 1 });
+
+      // Determine escrow status
+      const holdTransaction = transactions.find(t => t.type === "PAYMENT_HOLD");
+      const releaseTransaction = transactions.find(t => t.type === "PAYMENT_RELEASE");
+      const refundTransaction = transactions.find(t => t.type === "REFUND");
+
+      let escrowStatus: "NOT_PAID" | "LOCKED" | "RELEASED" | "REFUNDED" = "NOT_PAID";
+      if (refundTransaction) {
+        escrowStatus = "REFUNDED";
+      } else if (releaseTransaction) {
+        escrowStatus = "RELEASED";
+      } else if (holdTransaction) {
+        escrowStatus = "LOCKED";
+      }
+
+      // Calculate amounts
+      const { itemPrice, platformFee, inspectionFee, shippingFee, totalAmount } = order.financials;
+      const sellerWillReceive = itemPrice - platformFee;
+
+      res.json({
+        success: true,
+        data: {
+          orderId: id,
+          orderStatus: order.status,
+          escrowStatus,
+          financials: {
+            totalAmount,
+            itemPrice,
+            platformFee,
+            inspectionFee,
+            shippingFee,
+            sellerWillReceive,
+            platformWillReceive: platformFee + shippingFee,
+            inspectorWillReceive: inspectionFee,
+          },
+          timeline: {
+            paidAt: holdTransaction?.createdAt || null,
+            releasedAt: releaseTransaction?.createdAt || null,
+            refundedAt: refundTransaction?.createdAt || null,
+          },
+          transactions: transactions.map(t => ({
+            id: t._id,
+            type: t.type,
+            amount: t.amount,
+            status: t.status,
+            description: t.description,
+            createdAt: t.createdAt,
+            paymentGatewayRef: t.paymentGatewayRef,
+          })),
+          message: this.getEscrowMessage(escrowStatus, order.status),
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Helper: Get human-readable escrow message
+   */
+  private static getEscrowMessage(escrowStatus: string, orderStatus: string): string {
+    switch (escrowStatus) {
+      case "NOT_PAID":
+        return "Đơn hàng chưa được thanh toán. Tiền chưa vào hệ thống.";
+      case "LOCKED":
+        return "Tiền đang được giữ an toàn trên PayOS. Seller sẽ nhận tiền sau khi đơn hàng hoàn tất.";
+      case "RELEASED":
+        return "Tiền đã được chuyển cho Seller. Giao dịch hoàn tất.";
+      case "REFUNDED":
+        return "Tiền đã được hoàn lại cho Buyer.";
+      default:
+        return "";
+    }
+  }
+}

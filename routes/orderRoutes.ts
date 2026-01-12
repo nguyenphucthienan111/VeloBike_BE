@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { OrderService } from "../services/OrderService";
-import { OrderController } from "../controllers/OrderController";
+import { OrderController, OrderEscrowController } from "../controllers/OrderController";
 import { UserRole } from "../models/User";
 import { OrderStatus } from "../models/Order";
 import { protect, AuthRequest } from "../middleware/authMiddleware";
@@ -133,6 +133,45 @@ orderRoutes.get("/:id/timeline", protect, OrderController.getTimeline as any);
  *       - bearerAuth: []
  */
 orderRoutes.put("/:id/status", protect, OrderController.updateStatus as any);
+
+/**
+ * @swagger
+ * /api/orders/{id}/escrow-status:
+ *   get:
+ *     summary: Get escrow status and transaction history for an order
+ *     description: Returns detailed information about the escrow status, including whether money is locked, released, or refunded
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Order ID
+ *     responses:
+ *       200:
+ *         description: Escrow status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     escrowStatus:
+ *                       type: string
+ *                       enum: [NOT_PAID, LOCKED, RELEASED, REFUNDED]
+ *                     financials:
+ *                       type: object
+ *                     transactions:
+ *                       type: array
+ */
+orderRoutes.get("/:id/escrow-status", protect, OrderEscrowController.getEscrowStatus as any);
 
 // Generic transition endpoint (for advanced use)
 orderRoutes.post("/:id/transition", protect, transitionHandler as any);

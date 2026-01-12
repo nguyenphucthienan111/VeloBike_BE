@@ -10,6 +10,8 @@ export interface ITransaction extends Document {
   description: string;
   paymentGatewayRef?: string; // PayOS transaction ID
   metadata?: object; // Additional payment gateway data
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const TransactionSchema: Schema = new Schema(

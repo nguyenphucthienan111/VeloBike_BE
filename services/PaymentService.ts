@@ -1,6 +1,7 @@
 import axios from "axios";
 import { Order, OrderStatus } from "../models/Order";
 import { User, UserRole } from "../models/User";
+import { Transaction } from "../models/Transaction";
 import crypto from "crypto";
 import { OrderService } from "./OrderService";
 
@@ -156,6 +157,23 @@ export class PaymentService {
           return;
         }
 
+        // Create PAYMENT_HOLD transaction record (tiền đang treo trên PayOS)
+        await Transaction.create({
+          userId: order.buyerId,
+          type: "PAYMENT_HOLD",
+          amount: order.financials.totalAmount,
+          status: "COMPLETED",
+          relatedOrderId: order._id,
+          description: `Escrow locked for order #${order._id}`,
+          paymentGatewayRef: data.transactionId || `payos_${orderCode}`,
+          metadata: {
+            orderCode,
+            payosTransactionId: data.transactionId,
+            escrowStatus: "LOCKED",
+            lockedAt: new Date(),
+          },
+        });
+
         // Use OrderService to lock escrow (enforces FSM rules)
         await OrderService.lockEscrow(
           order._id.toString(),
@@ -249,6 +267,35 @@ export class PaymentService {
         );
       }
 
+      // Create PAYMENT_RELEASE transaction for seller
+      await Transaction.create({
+        userId: sellerId,
+        type: "PAYMENT_RELEASE",
+        amount: sellerAmount,
+        status: "COMPLETED",
+        relatedOrderId: order._id,
+        description: `Payment released for order #${order._id}`,
+        metadata: {
+          escrowStatus: "RELEASED",
+          releasedAt: new Date(),
+          breakdown: {
+            itemPrice: order.financials.itemPrice,
+            platformFee: order.financials.platformFee,
+            sellerReceived: sellerAmount,
+          },
+        },
+      });
+
+      // Create PLATFORM_FEE transaction
+      await Transaction.create({
+        userId: sellerId, // Track against seller for reference
+        type: "PLATFORM_FEE",
+        amount: platformAmount,
+        status: "COMPLETED",
+        relatedOrderId: order._id,
+        description: `Platform fee for order #${order._id}`,
+      });
+
       // Update seller wallet as fallback
       seller.wallet.balance += sellerAmount;
       await seller.save();
@@ -263,7 +310,8 @@ export class PaymentService {
   }
 
   /**
-   * Refund payment to buyer (simulated)
+   * Refund payment to buyer
+   * Creates refund transaction and attempts PayOS refund if available
    */
   static async refundPayment(orderId: string): Promise<void> {
     try {
@@ -271,13 +319,79 @@ export class PaymentService {
       if (!order) throw new Error("Order not found");
 
       const buyer = await User.findById(order.buyerId);
-      if (buyer) {
+      if (!buyer) throw new Error("Buyer not found");
+
+      // Find the original PAYMENT_HOLD transaction to get PayOS reference
+      const holdTransaction = await Transaction.findOne({
+        relatedOrderId: order._id,
+        type: "PAYMENT_HOLD",
+        status: "COMPLETED",
+      });
+
+      // Attempt PayOS refund if we have the transaction reference
+      let payosRefundSuccess = false;
+      if (holdTransaction?.paymentGatewayRef) {
+        try {
+          const payload = {
+            orderId,
+            transactionId: holdTransaction.paymentGatewayRef,
+            amount: order.financials.totalAmount,
+            reason: "Order refunded",
+          };
+          const sig = this.createSignature(payload);
+          await axios.post(`${this.PAYOS_API_BASE}/refunds`, payload, {
+            headers: {
+              "x-client-id": this.PAYOS_CLIENT_ID,
+              "x-api-key": this.PAYOS_API_KEY,
+              "x-signature": sig,
+              "Content-Type": "application/json",
+            },
+          });
+          payosRefundSuccess = true;
+          console.log(`PayOS refund successful for order ${orderId}`);
+        } catch (err) {
+          console.warn(
+            "PayOS refund failed, falling back to wallet credit:",
+            (err as any).message
+          );
+        }
+      }
+
+      // Create REFUND transaction record
+      await Transaction.create({
+        userId: order.buyerId,
+        type: "REFUND",
+        amount: order.financials.totalAmount,
+        status: "COMPLETED",
+        relatedOrderId: order._id,
+        description: `Refund for order #${order._id}`,
+        paymentGatewayRef: holdTransaction?.paymentGatewayRef,
+        metadata: {
+          escrowStatus: "REFUNDED",
+          refundedAt: new Date(),
+          refundMethod: payosRefundSuccess ? "PAYOS_DIRECT" : "WALLET_CREDIT",
+          originalPaymentRef: holdTransaction?.paymentGatewayRef,
+        },
+      });
+
+      // Update original PAYMENT_HOLD transaction metadata
+      if (holdTransaction) {
+        holdTransaction.metadata = {
+          ...holdTransaction.metadata,
+          escrowStatus: "REFUNDED",
+          refundedAt: new Date(),
+        };
+        await holdTransaction.save();
+      }
+
+      // Credit buyer wallet (fallback or additional credit)
+      if (!payosRefundSuccess) {
         buyer.wallet.balance += order.financials.totalAmount;
         await buyer.save();
       }
 
       console.log(
-        `Refund processed for order ${orderId}: ${order.financials.totalAmount} VND`
+        `Refund processed for order ${orderId}: ${order.financials.totalAmount} VND (method: ${payosRefundSuccess ? "PayOS" : "Wallet"})`
       );
     } catch (err: any) {
       console.error("Refund error:", err.message);
