@@ -1,16 +1,10 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { User, UserRole, KycStatus } from "../models/User";
 import { Otp } from "../models/Otp";
 import { EmailService } from "../services/EmailService";
-
-function generateToken(user: any) {
-  const payload = { id: user._id.toString(), role: user.role };
-  const secret = process.env.JWT_SECRET || "dev_secret";
-  return jwt.sign(payload, secret, { expiresIn: "7d" });
-}
+import { TokenService } from "../services/TokenService";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
@@ -70,12 +64,15 @@ export class AuthController {
         }`
       );
 
-      // Return limited user data; token issued but emailVerified flag false
-      const token = generateToken(newUser);
+      // Return tokens using new TokenService
+      const deviceInfo = TokenService.extractDeviceInfo(req);
+      const { accessToken, refreshToken } = await TokenService.generateTokenPair(newUser, deviceInfo);
+      
       res.status(201).json({
         success: true,
         message: "Tài khoản đã được tạo. Vui lòng kiểm tra email để xác thực.",
-        token,
+        accessToken,
+        refreshToken,
         user: {
           id: newUser._id,
           email: newUser.email,
@@ -126,11 +123,14 @@ export class AuthController {
       // Clean up OTP immediately
       await Otp.deleteOne({ _id: record._id });
 
-      const token = generateToken(user);
+      const deviceInfo = TokenService.extractDeviceInfo(req);
+      const { accessToken, refreshToken } = await TokenService.generateTokenPair(user, deviceInfo);
+      
       res.json({
         success: true,
         message: "Email verified",
-        token,
+        accessToken,
+        refreshToken,
         user: {
           id: user._id,
           email: user.email,
@@ -164,10 +164,13 @@ export class AuthController {
           .status(401)
           .json({ success: false, message: "Invalid credentials" });
 
-      const token = generateToken(user);
+      const deviceInfo = TokenService.extractDeviceInfo(req);
+      const { accessToken, refreshToken } = await TokenService.generateTokenPair(user, deviceInfo);
+      
       res.json({
         success: true,
-        token,
+        accessToken,
+        refreshToken,
         user: {
           id: user._id,
           email: user.email,
@@ -228,10 +231,13 @@ export class AuthController {
         await user.save();
       }
 
-      const token = generateToken(user);
+      const deviceInfo = TokenService.extractDeviceInfo(req);
+      const { accessToken, refreshToken } = await TokenService.generateTokenPair(user, deviceInfo);
+      
       res.json({
         success: true,
-        token,
+        accessToken,
+        refreshToken,
         user: {
           id: user._id,
           email: user.email,
@@ -289,10 +295,13 @@ export class AuthController {
         }
       }
 
-      const token = generateToken(user);
+      const deviceInfo = TokenService.extractDeviceInfo(req);
+      const { accessToken, refreshToken } = await TokenService.generateTokenPair(user, deviceInfo);
+      
       res.json({
         success: true,
-        token,
+        accessToken,
+        refreshToken,
         user: {
           id: user._id,
           email: user.email,
@@ -369,15 +378,17 @@ export class AuthController {
         await user.save();
       }
 
-      // Create token
-      const token = generateToken(user);
+      // Create tokens using new TokenService
+      const deviceInfo = TokenService.extractDeviceInfo(req);
+      const { accessToken, refreshToken } = await TokenService.generateTokenPair(user, deviceInfo);
 
       // Clean up OTP immediately
       await Otp.deleteOne({ _id: record._id });
 
       res.json({
         success: true,
-        token,
+        accessToken,
+        refreshToken,
         user: {
           id: user._id,
           email: user.email,
@@ -475,6 +486,83 @@ export class AuthController {
       await Otp.deleteOne({ _id: record._id });
 
       res.json({ success: true, message: "Password reset successfully" });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // POST /api/auth/refresh-token
+  // Body: { refreshToken }
+  static async refreshToken(req: Request, res: Response) {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        return res.status(400).json({ success: false, message: "Refresh token required" });
+      }
+
+      const { accessToken, user } = await TokenService.refreshAccessToken(refreshToken);
+
+      res.json({
+        success: true,
+        accessToken,
+        user: {
+          id: user._id,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role,
+        },
+      });
+    } catch (err: any) {
+      res.status(401).json({ success: false, message: err.message });
+    }
+  }
+
+  // POST /api/auth/logout
+  // Body: { refreshToken }
+  static async logout(req: Request, res: Response) {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        return res.status(400).json({ success: false, message: "Refresh token required" });
+      }
+
+      const revoked = await TokenService.revokeRefreshToken(refreshToken);
+      if (!revoked) {
+        return res.status(400).json({ success: false, message: "Invalid refresh token" });
+      }
+
+      res.json({ success: true, message: "Logged out successfully" });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // POST /api/auth/logout-all
+  // Logout from all devices
+  static async logoutAll(req: any, res: Response) {
+    try {
+      const userId = req.user.id; // From auth middleware
+
+      const revokedCount = await TokenService.revokeAllUserTokens(userId);
+
+      res.json({ 
+        success: true, 
+        message: `Logged out from ${revokedCount} devices successfully` 
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // GET /api/auth/sessions
+  // Get user's active sessions
+  static async getActiveSessions(req: any, res: Response) {
+    try {
+      const userId = req.user.id;
+
+      const sessions = await TokenService.getUserActiveSessions(userId);
+
+      res.json({ success: true, data: sessions });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
     }

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { AuthController } from "../controllers/AuthController";
 import { validationRules, validate } from "../middleware/validationMiddleware";
+import { protect } from "../middleware/authMiddleware";
 
 export const authRoutes = Router();
 
@@ -202,9 +203,6 @@ authRoutes.post("/facebook", AuthController.facebookLogin as any);
  *       400:
  *         description: Incorrect current password
  */
-// Import protect middleware locally to avoid circular dependency issues if any,
-// or better, just import it at top if not present.
-import { protect } from "../middleware/authMiddleware";
 authRoutes.post("/change-password", protect, AuthController.changePassword as any);
 
 /**
@@ -297,3 +295,111 @@ authRoutes.post("/reset-password", AuthController.resetPassword as any);
  *         description: KYC submitted
  */
 authRoutes.post("/kyc-submit", protect, AuthController.submitKyc as any);
+
+/**
+ * @swagger
+ * /api/auth/refresh-token:
+ *   post:
+ *     summary: Refresh access token using refresh token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 description: The refresh token received during login
+ *     responses:
+ *       200:
+ *         description: New access token generated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 accessToken:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *       401:
+ *         description: Invalid or expired refresh token
+ */
+authRoutes.post("/refresh-token", AuthController.refreshToken as any);
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Logout from current device
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *       400:
+ *         description: Invalid refresh token
+ */
+authRoutes.post("/logout", AuthController.logout as any);
+
+/**
+ * @swagger
+ * /api/auth/logout-all:
+ *   post:
+ *     summary: Logout from all devices
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out from all devices
+ */
+authRoutes.post("/logout-all", protect, AuthController.logoutAll as any);
+
+/**
+ * @swagger
+ * /api/auth/sessions:
+ *   get:
+ *     summary: Get user's active sessions
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of active sessions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       deviceInfo:
+ *                         type: object
+ *                       lastUsedAt:
+ *                         type: string
+ *                       createdAt:
+ *                         type: string
+ */
+authRoutes.get("/sessions", protect, AuthController.getActiveSessions as any);

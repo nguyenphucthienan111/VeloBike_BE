@@ -1,11 +1,15 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IInspection extends Document {
-  orderId: mongoose.Types.ObjectId;
+  listingId: mongoose.Types.ObjectId; // Always required
+  orderId?: mongoose.Types.ObjectId; // Optional for PRE_SALE inspections
   inspectorId: mongoose.Types.ObjectId;
+  type: "PRE_SALE" | "POST_SALE_ORDER"; // New field per bạn bạn suggestion
   overallVerdict: "PASSED" | "FAILED" | "SUGGEST_ADJUSTMENT";
   overallScore: number; // 1-10
   grade: "A" | "B" | "C" | "D"; // SRS BikeMarket grade system
+  fee?: number; // Inspection fee amount
+  feeTransactionId?: mongoose.Types.ObjectId; // Link to Transaction
 
   checkpoints: Array<{
     component: string; // e.g., "Frame - Top Tube", "Rear Derailleur"
@@ -21,13 +25,24 @@ export interface IInspection extends Document {
 
 const InspectionSchema: Schema = new Schema(
   {
+    listingId: {
+      type: Schema.Types.ObjectId,
+      ref: "Listing",
+      required: true,
+      index: true,
+    },
     orderId: {
       type: Schema.Types.ObjectId,
       ref: "Order",
-      required: true,
-      unique: true,
+      index: true, // Not required for PRE_SALE inspections
     },
     inspectorId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    type: {
+      type: String,
+      enum: ["PRE_SALE", "POST_SALE_ORDER"],
+      required: true,
+      index: true,
+    },
     overallVerdict: {
       type: String,
       enum: ["PASSED", "FAILED", "SUGGEST_ADJUSTMENT"],
@@ -38,7 +53,12 @@ const InspectionSchema: Schema = new Schema(
       type: String, 
       enum: ["A", "B", "C", "D"], 
       required: true 
-    }, // SRS BikeMarket grade system
+    },
+    fee: { type: Number }, // Inspection fee
+    feeTransactionId: {
+      type: Schema.Types.ObjectId,
+      ref: "Transaction",
+    },
 
     checkpoints: [
       {

@@ -5,6 +5,7 @@ export interface ICategory extends MongooseDocument {
   slug: string;
   description?: string;
   icon?: string;
+  specsTemplate?: string[]; // Required specs fields for this category type
   isActive: boolean;
   createdAt: Date;
 }
@@ -15,6 +16,7 @@ const CategorySchema = new Schema<ICategory>(
     slug: { type: String, required: true, unique: true, index: true },
     description: String,
     icon: String,
+    specsTemplate: [String], // Array of required spec fields
     isActive: { type: Boolean, default: true, index: true },
   },
   { timestamps: true }

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
 import { User, UserRole } from "../models/User";
+import { TokenService } from "../services/TokenService";
 
 // Extend Express Request to include user info
 export interface AuthRequest extends Request {
@@ -21,8 +21,8 @@ export const protect = async (req: any, res: any, next: NextFunction) => {
     try {
       token = req.headers.authorization.split(" ")[1];
 
-      const secret = process.env.JWT_SECRET || "dev_secret";
-      const decoded: any = jwt.verify(token, secret);
+      // Use new TokenService for verification
+      const decoded: any = TokenService.verifyAccessToken(token);
 
       // Check if user exists in DB
       const user = await User.findById(decoded.id).select("-passwordHash");

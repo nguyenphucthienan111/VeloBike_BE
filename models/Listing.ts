@@ -25,12 +25,14 @@ export enum ListingStatus {
 // Common Interface for all bikes
 export interface IListing extends MongooseDocument {
   sellerId: Types.ObjectId;
+  brandId?: Types.ObjectId; // Reference to BRAND (optional for backward compatibility)
+  categoryId?: Types.ObjectId; // Reference to CATEGORY (optional for backward compatibility)
   title: string;
   description: string;
   type: BikeType;
   status: ListingStatus;
   generalInfo: {
-    brand: string;
+    brand: string; // Keep for backward compatibility, but prefer brandId
     model: string;
     year: number;
     size: string;
@@ -81,6 +83,16 @@ const ListingSchema = new Schema<IListing>(
       ref: "User",
       required: true,
       index: true,
+    },
+    brandId: {
+      type: Schema.Types.ObjectId,
+      ref: "Brand",
+      index: true, // Optional for backward compatibility
+    },
+    categoryId: {
+      type: Schema.Types.ObjectId,
+      ref: "Category", 
+      index: true, // Optional for backward compatibility
     },
     title: { type: String, required: true, index: "text" },
     description: { type: String, required: true },
