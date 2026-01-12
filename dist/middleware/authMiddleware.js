@@ -8,13 +8,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.authorize = exports.protect = void 0;
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+exports.requireRole = exports.authorize = exports.protect = void 0;
 const User_1 = require("../models/User");
+const TokenService_1 = require("../services/TokenService");
 // 1. Verify Token Middleware
 const protect = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     let token;
@@ -22,8 +19,8 @@ const protect = (req, res, next) => __awaiter(void 0, void 0, void 0, function* 
         req.headers.authorization.startsWith("Bearer")) {
         try {
             token = req.headers.authorization.split(" ")[1];
-            const secret = process.env.JWT_SECRET || "dev_secret";
-            const decoded = jsonwebtoken_1.default.verify(token, secret);
+            // Use new TokenService for verification
+            const decoded = TokenService_1.TokenService.verifyAccessToken(token);
             // Check if user exists in DB
             const user = yield User_1.User.findById(decoded.id).select("-passwordHash");
             if (!user) {
@@ -69,4 +66,6 @@ const authorize = (...roles) => {
     };
 };
 exports.authorize = authorize;
+// Alias for authorize (used in some routes)
+exports.requireRole = exports.authorize;
 //# sourceMappingURL=authMiddleware.js.map

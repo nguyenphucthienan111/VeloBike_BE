@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Conversation = exports.Message = void 0;
+exports.Message = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const MessageSchema = new mongoose_1.Schema({
     conversationId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Conversation", required: true, index: true },
@@ -45,16 +45,4 @@ const MessageSchema = new mongoose_1.Schema({
     readAt: Date,
 }, { timestamps: true });
 exports.Message = mongoose_1.default.model("Message", MessageSchema);
-const ConversationSchema = new mongoose_1.Schema({
-    buyerId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    sellerId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    listingId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Listing" },
-    orderId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Order" },
-    lastMessage: String,
-    lastMessageAt: Date,
-    isActive: { type: Boolean, default: true, index: true },
-}, { timestamps: true });
-// Index for finding conversations between two users
-ConversationSchema.index({ buyerId: 1, sellerId: 1 }, { unique: true });
-exports.Conversation = mongoose_1.default.model("Conversation", ConversationSchema);
 //# sourceMappingURL=Message.js.map

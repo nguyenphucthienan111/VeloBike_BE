@@ -52,7 +52,12 @@ const recommendationRoutes_1 = require("./routes/recommendationRoutes");
 const alertRoutes_1 = require("./routes/alertRoutes");
 const fraudRoutes_1 = require("./routes/fraudRoutes");
 const bulkRoutes_1 = require("./routes/bulkRoutes");
+const reportRoutes_1 = require("./routes/reportRoutes");
+const transactionRoutes_1 = require("./routes/transactionRoutes");
+const subscriptionRoutes_1 = require("./routes/subscriptionRoutes");
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
+// Import Subscription Service for initialization
+const SubscriptionService_1 = require("./services/SubscriptionService");
 // Initialize App & Socket.io
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
@@ -68,6 +73,8 @@ if (process.env.NODE_ENV !== 'test') {
     CacheService_1.CacheService.init().catch(console.error);
     // Start alert processing
     AlertService_1.AlertService.startAlertProcessing();
+    // Initialize default subscription plans
+    SubscriptionService_1.SubscriptionService.initializeDefaultPlans().catch(console.error);
 }
 // Ensure uploads directory exists (Task B4 Fix)
 const uploadDir = path_1.default.join(__dirname, "uploads");
@@ -174,6 +181,9 @@ app.use("/api/recommendations", recommendationRoutes_1.recommendationRoutes);
 app.use("/api/alerts", alertRoutes_1.alertRoutes);
 app.use("/api/fraud", fraudRoutes_1.fraudRoutes);
 app.use("/api/bulk", bulkRoutes_1.bulkRoutes);
+app.use("/api/reports", reportRoutes_1.reportRoutes);
+app.use("/api/transactions", transactionRoutes_1.transactionRoutes);
+app.use("/api/subscriptions", subscriptionRoutes_1.subscriptionRoutes);
 // Health Check Endpoint
 app.get("/health", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const cacheStats = yield CacheService_1.CacheService.getStats();

@@ -47,7 +47,9 @@ var BikeType;
 var ListingStatus;
 (function (ListingStatus) {
     ListingStatus["DRAFT"] = "DRAFT";
+    ListingStatus["PENDING_APPROVAL"] = "PENDING_APPROVAL";
     ListingStatus["PUBLISHED"] = "PUBLISHED";
+    ListingStatus["REJECTED"] = "REJECTED";
     ListingStatus["IN_INSPECTION"] = "IN_INSPECTION";
     ListingStatus["SOLD"] = "SOLD";
 })(ListingStatus || (exports.ListingStatus = ListingStatus = {}));
@@ -58,6 +60,16 @@ const ListingSchema = new mongoose_1.Schema({
         ref: "User",
         required: true,
         index: true,
+    },
+    brandId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Brand",
+        index: true, // Optional for backward compatibility
+    },
+    categoryId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Category",
+        index: true, // Optional for backward compatibility
     },
     title: { type: String, required: true, index: "text" },
     description: { type: String, required: true },

@@ -44,7 +44,11 @@ import { fraudRoutes } from "./routes/fraudRoutes";
 import { bulkRoutes } from "./routes/bulkRoutes";
 import { reportRoutes } from "./routes/reportRoutes";
 import { transactionRoutes } from "./routes/transactionRoutes";
+import { subscriptionRoutes } from "./routes/subscriptionRoutes";
 import userRoutes from "./routes/userRoutes";
+
+// Import Subscription Service for initialization
+import { SubscriptionService } from "./services/SubscriptionService";
 
 // Initialize App & Socket.io
 const app = express();
@@ -64,6 +68,9 @@ if (process.env.NODE_ENV !== 'test') {
   
   // Start alert processing
   AlertService.startAlertProcessing();
+  
+  // Initialize default subscription plans
+  SubscriptionService.initializeDefaultPlans().catch(console.error);
 }
 
 // Ensure uploads directory exists (Task B4 Fix)
@@ -188,6 +195,7 @@ app.use("/api/fraud", fraudRoutes);
 app.use("/api/bulk", bulkRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/transactions", transactionRoutes);
+app.use("/api/subscriptions", subscriptionRoutes);
 
 // Health Check Endpoint
 app.get("/health", async (req, res) => {

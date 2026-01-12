@@ -287,6 +287,30 @@ exports.listingRoutes.post("/fit-calculator", validationMiddleware_1.validationR
 exports.listingRoutes.get("/my-listings", authMiddleware_1.protect, ListingController_1.ListingController.getMyListings);
 /**
  * @swagger
+ * /api/listings/{id}/submit-approval:
+ *   put:
+ *     summary: Submit listing for admin approval (SRS BikeMarket requirement)
+ *     tags: [Listings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Listing ID
+ *     responses:
+ *       200:
+ *         description: Listing submitted for approval
+ *       400:
+ *         description: Invalid listing status for submission
+ *       403:
+ *         description: Not authorized
+ */
+exports.listingRoutes.put("/:id/submit-approval", authMiddleware_1.protect, ListingController_1.ListingController.submitForApproval);
+/**
+ * @swagger
  * /api/listings/{id}:
  *   put:
  *     summary: Update a listing (Seller only)

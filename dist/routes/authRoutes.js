@@ -4,6 +4,7 @@ exports.authRoutes = void 0;
 const express_1 = require("express");
 const AuthController_1 = require("../controllers/AuthController");
 const validationMiddleware_1 = require("../middleware/validationMiddleware");
+const authMiddleware_1 = require("../middleware/authMiddleware");
 exports.authRoutes = (0, express_1.Router)();
 /**
  * @swagger
@@ -198,9 +199,6 @@ exports.authRoutes.post("/facebook", AuthController_1.AuthController.facebookLog
  *       400:
  *         description: Incorrect current password
  */
-// Import protect middleware locally to avoid circular dependency issues if any,
-// or better, just import it at top if not present.
-const authMiddleware_1 = require("../middleware/authMiddleware");
 exports.authRoutes.post("/change-password", authMiddleware_1.protect, AuthController_1.AuthController.changePassword);
 /**
  * @swagger
@@ -290,4 +288,108 @@ exports.authRoutes.post("/reset-password", AuthController_1.AuthController.reset
  *         description: KYC submitted
  */
 exports.authRoutes.post("/kyc-submit", authMiddleware_1.protect, AuthController_1.AuthController.submitKyc);
+/**
+ * @swagger
+ * /api/auth/refresh-token:
+ *   post:
+ *     summary: Refresh access token using refresh token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 description: The refresh token received during login
+ *     responses:
+ *       200:
+ *         description: New access token generated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 accessToken:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *       401:
+ *         description: Invalid or expired refresh token
+ */
+exports.authRoutes.post("/refresh-token", AuthController_1.AuthController.refreshToken);
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Logout from current device
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *       400:
+ *         description: Invalid refresh token
+ */
+exports.authRoutes.post("/logout", AuthController_1.AuthController.logout);
+/**
+ * @swagger
+ * /api/auth/logout-all:
+ *   post:
+ *     summary: Logout from all devices
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out from all devices
+ */
+exports.authRoutes.post("/logout-all", authMiddleware_1.protect, AuthController_1.AuthController.logoutAll);
+/**
+ * @swagger
+ * /api/auth/sessions:
+ *   get:
+ *     summary: Get user's active sessions
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of active sessions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       deviceInfo:
+ *                         type: object
+ *                       lastUsedAt:
+ *                         type: string
+ *                       createdAt:
+ *                         type: string
+ */
+exports.authRoutes.get("/sessions", authMiddleware_1.protect, AuthController_1.AuthController.getActiveSessions);
 //# sourceMappingURL=authRoutes.js.map

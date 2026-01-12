@@ -16,6 +16,7 @@ exports.PaymentService = void 0;
 const axios_1 = __importDefault(require("axios"));
 const Order_1 = require("../models/Order");
 const User_1 = require("../models/User");
+const Transaction_1 = require("../models/Transaction");
 const crypto_1 = __importDefault(require("crypto"));
 const OrderService_1 = require("./OrderService");
 class PaymentService {
@@ -126,6 +127,22 @@ class PaymentService {
                         console.warn("Order not found for orderCode", orderCode);
                         return;
                     }
+                    // Create PAYMENT_HOLD transaction record (tiền đang treo trên PayOS)
+                    yield Transaction_1.Transaction.create({
+                        userId: order.buyerId,
+                        type: "PAYMENT_HOLD",
+                        amount: order.financials.totalAmount,
+                        status: "COMPLETED",
+                        relatedOrderId: order._id,
+                        description: `Escrow locked for order #${order._id}`,
+                        paymentGatewayRef: data.transactionId || `payos_${orderCode}`,
+                        metadata: {
+                            orderCode,
+                            payosTransactionId: data.transactionId,
+                            escrowStatus: "LOCKED",
+                            lockedAt: new Date(),
+                        },
+                    });
                     // Use OrderService to lock escrow (enforces FSM rules)
                     yield OrderService_1.OrderService.lockEscrow(order._id.toString(), data.transactionId || "payos_tx");
                     // Persist timeline note
@@ -205,6 +222,33 @@ class PaymentService {
                 catch (err) {
                     console.warn("PayOS split payout failed or simulated:", err.message);
                 }
+                // Create PAYMENT_RELEASE transaction for seller
+                yield Transaction_1.Transaction.create({
+                    userId: sellerId,
+                    type: "PAYMENT_RELEASE",
+                    amount: sellerAmount,
+                    status: "COMPLETED",
+                    relatedOrderId: order._id,
+                    description: `Payment released for order #${order._id}`,
+                    metadata: {
+                        escrowStatus: "RELEASED",
+                        releasedAt: new Date(),
+                        breakdown: {
+                            itemPrice: order.financials.itemPrice,
+                            platformFee: order.financials.platformFee,
+                            sellerReceived: sellerAmount,
+                        },
+                    },
+                });
+                // Create PLATFORM_FEE transaction
+                yield Transaction_1.Transaction.create({
+                    userId: sellerId, // Track against seller for reference
+                    type: "PLATFORM_FEE",
+                    amount: platformAmount,
+                    status: "COMPLETED",
+                    relatedOrderId: order._id,
+                    description: `Platform fee for order #${order._id}`,
+                });
                 // Update seller wallet as fallback
                 seller.wallet.balance += sellerAmount;
                 yield seller.save();
@@ -217,7 +261,8 @@ class PaymentService {
         });
     }
     /**
-     * Refund payment to buyer (simulated)
+     * Refund payment to buyer
+     * Creates refund transaction and attempts PayOS refund if available
      */
     static refundPayment(orderId) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -226,11 +271,67 @@ class PaymentService {
                 if (!order)
                     throw new Error("Order not found");
                 const buyer = yield User_1.User.findById(order.buyerId);
-                if (buyer) {
+                if (!buyer)
+                    throw new Error("Buyer not found");
+                // Find the original PAYMENT_HOLD transaction to get PayOS reference
+                const holdTransaction = yield Transaction_1.Transaction.findOne({
+                    relatedOrderId: order._id,
+                    type: "PAYMENT_HOLD",
+                    status: "COMPLETED",
+                });
+                // Attempt PayOS refund if we have the transaction reference
+                let payosRefundSuccess = false;
+                if (holdTransaction === null || holdTransaction === void 0 ? void 0 : holdTransaction.paymentGatewayRef) {
+                    try {
+                        const payload = {
+                            orderId,
+                            transactionId: holdTransaction.paymentGatewayRef,
+                            amount: order.financials.totalAmount,
+                            reason: "Order refunded",
+                        };
+                        const sig = this.createSignature(payload);
+                        yield axios_1.default.post(`${this.PAYOS_API_BASE}/refunds`, payload, {
+                            headers: {
+                                "x-client-id": this.PAYOS_CLIENT_ID,
+                                "x-api-key": this.PAYOS_API_KEY,
+                                "x-signature": sig,
+                                "Content-Type": "application/json",
+                            },
+                        });
+                        payosRefundSuccess = true;
+                        console.log(`PayOS refund successful for order ${orderId}`);
+                    }
+                    catch (err) {
+                        console.warn("PayOS refund failed, falling back to wallet credit:", err.message);
+                    }
+                }
+                // Create REFUND transaction record
+                yield Transaction_1.Transaction.create({
+                    userId: order.buyerId,
+                    type: "REFUND",
+                    amount: order.financials.totalAmount,
+                    status: "COMPLETED",
+                    relatedOrderId: order._id,
+                    description: `Refund for order #${order._id}`,
+                    paymentGatewayRef: holdTransaction === null || holdTransaction === void 0 ? void 0 : holdTransaction.paymentGatewayRef,
+                    metadata: {
+                        escrowStatus: "REFUNDED",
+                        refundedAt: new Date(),
+                        refundMethod: payosRefundSuccess ? "PAYOS_DIRECT" : "WALLET_CREDIT",
+                        originalPaymentRef: holdTransaction === null || holdTransaction === void 0 ? void 0 : holdTransaction.paymentGatewayRef,
+                    },
+                });
+                // Update original PAYMENT_HOLD transaction metadata
+                if (holdTransaction) {
+                    holdTransaction.metadata = Object.assign(Object.assign({}, holdTransaction.metadata), { escrowStatus: "REFUNDED", refundedAt: new Date() });
+                    yield holdTransaction.save();
+                }
+                // Credit buyer wallet (fallback or additional credit)
+                if (!payosRefundSuccess) {
                     buyer.wallet.balance += order.financials.totalAmount;
                     yield buyer.save();
                 }
-                console.log(`Refund processed for order ${orderId}: ${order.financials.totalAmount} VND`);
+                console.log(`Refund processed for order ${orderId}: ${order.financials.totalAmount} VND (method: ${payosRefundSuccess ? "PayOS" : "Wallet"})`);
             }
             catch (err) {
                 console.error("Refund error:", err.message);

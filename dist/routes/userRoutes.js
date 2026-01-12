@@ -88,8 +88,9 @@ exports.userRoutes.put("/me", authMiddleware_1.protect, (req, res) => __awaiter(
  * @swagger
  * /api/users/kyc:
  *   post:
- *     summary: Submit KYC data for verification
+ *     summary: Submit KYC data for verification (Deprecated - use /api/auth/kyc-submit instead)
  *     tags: [Users]
+ *     deprecated: true
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -105,24 +106,14 @@ exports.userRoutes.put("/me", authMiddleware_1.protect, (req, res) => __awaiter(
  *                 type: string
  *     responses:
  *       200:
- *         description: KYC submitted
+ *         description: KYC submitted - Redirects to /api/auth/kyc-submit
  */
 exports.userRoutes.post("/kyc", authMiddleware_1.protect, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
-    try {
-        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
-        const { documentId, documentType } = req.body;
-        const user = yield User_1.User.findById(userId);
-        if (!user)
-            return res.status(404).json({ success: false, message: "User not found" });
-        user.kycData = { documentId, documentType, verifiedAt: undefined };
-        user.kycStatus = "PENDING";
-        yield user.save();
-        res.json({ success: true, message: "KYC submitted", data: { kycStatus: user.kycStatus } });
-    }
-    catch (err) {
-        res.status(500).json({ success: false, message: err.message });
-    }
+    // Redirect to main KYC endpoint to avoid duplicate logic
+    res.status(301).json({
+        success: false,
+        message: "This endpoint is deprecated. Please use POST /api/auth/kyc-submit instead"
+    });
 }));
 /**
  * @swagger

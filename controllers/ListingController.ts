@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Listing, ListingStatus } from "../models/Listing";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { ChatbotService } from "../services/ChatbotService"; // Reuse AI service
+import { SubscriptionService } from "../services/SubscriptionService";
 
 export class ListingController {
   // GET /api/listings
@@ -60,6 +61,21 @@ export class ListingController {
           .json({ success: false, message: "Unauthorized" });
       }
 
+      // Check subscription quota before creating listing
+      const quotaCheck = await SubscriptionService.canCreateListing(sellerId);
+      if (!quotaCheck.canCreate) {
+        return res.status(403).json({
+          success: false,
+          message: quotaCheck.reason,
+          data: {
+            used: quotaCheck.used,
+            limit: quotaCheck.limit,
+            planType: quotaCheck.planType,
+            upgradeUrl: "/api/subscriptions/plans",
+          },
+        });
+      }
+
       const newListing = new Listing({
         ...req.body,
         sellerId: sellerId, // Force override sellerId from token
@@ -68,10 +84,18 @@ export class ListingController {
 
       await newListing.save();
 
+      // Increment listing count for subscription
+      await SubscriptionService.incrementListingCount(sellerId);
+
       res.status(201).json({ 
         success: true, 
         data: newListing,
-        message: "Listing created as draft. Use PUT /api/listings/:id to submit for approval."
+        message: "Listing created as draft. Use PUT /api/listings/:id to submit for approval.",
+        quota: {
+          used: quotaCheck.used + 1,
+          limit: quotaCheck.limit,
+          planType: quotaCheck.planType,
+        },
       });
     } catch (error: any) {
       res.status(400).json({ success: false, message: error.message });

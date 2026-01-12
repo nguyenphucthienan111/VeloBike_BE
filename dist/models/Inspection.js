@@ -36,19 +36,40 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Inspection = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const InspectionSchema = new mongoose_1.Schema({
+    listingId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Listing",
+        required: true,
+        index: true,
+    },
     orderId: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: "Order",
-        required: true,
-        unique: true,
+        index: true, // Not required for PRE_SALE inspections
     },
     inspectorId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
+    type: {
+        type: String,
+        enum: ["PRE_SALE", "POST_SALE_ORDER"],
+        required: true,
+        index: true,
+    },
     overallVerdict: {
         type: String,
         enum: ["PASSED", "FAILED", "SUGGEST_ADJUSTMENT"],
         required: true,
     },
     overallScore: { type: Number, required: true, min: 1, max: 10 },
+    grade: {
+        type: String,
+        enum: ["A", "B", "C", "D"],
+        required: true
+    },
+    fee: { type: Number }, // Inspection fee
+    feeTransactionId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Transaction",
+    },
     checkpoints: [
         {
             component: { type: String, required: true },

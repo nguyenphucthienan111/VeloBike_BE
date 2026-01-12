@@ -40,6 +40,7 @@ const CategorySchema = new mongoose_1.Schema({
     slug: { type: String, required: true, unique: true, index: true },
     description: String,
     icon: String,
+    specsTemplate: [String], // Array of required spec fields
     isActive: { type: Boolean, default: true, index: true },
 }, { timestamps: true });
 exports.Category = mongoose_1.default.model("Category", CategorySchema);

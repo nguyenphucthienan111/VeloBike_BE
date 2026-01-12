@@ -13,8 +13,12 @@ exports.OrderService = void 0;
 const Order_1 = require("../models/Order");
 const Listing_1 = require("../models/Listing");
 const User_1 = require("../models/User");
+const Transaction_1 = require("../models/Transaction");
 const mongoose_1 = require("mongoose");
 const NotificationService_1 = require("./NotificationService");
+const SubscriptionService_1 = require("./SubscriptionService");
+// Platform account ID - should be set in .env or created during system setup
+const PLATFORM_ACCOUNT_ID = process.env.PLATFORM_ACCOUNT_ID || null;
 class OrderService {
     /**
      * Validate and transition order status
@@ -62,8 +66,10 @@ class OrderService {
             if (listing.status === "SOLD") {
                 throw new Error("This item is already sold");
             }
+            // Get seller's commission rate from subscription
+            const commissionRate = yield SubscriptionService_1.SubscriptionService.getCommissionRate(listing.sellerId.toString());
             const shippingFee = 150000; // Example: VND
-            const platformFee = Math.ceil(listing.pricing.amount * 0.1); // 10%
+            const platformFee = Math.ceil(listing.pricing.amount * commissionRate); // Dynamic based on subscription
             const order = new Order_1.Order({
                 listingId: new mongoose_1.Types.ObjectId(listingId),
                 buyerId: new mongoose_1.Types.ObjectId(buyerId),
@@ -163,16 +169,87 @@ class OrderService {
             // 2. Distribute Funds (Split Payment)
             const { itemPrice, platformFee, inspectionFee } = order.financials;
             const sellerPayout = itemPrice - platformFee;
+            // Create PAYMENT_RELEASE transaction for seller
+            yield Transaction_1.Transaction.create({
+                userId: order.sellerId,
+                type: "PAYMENT_RELEASE",
+                amount: sellerPayout,
+                status: "COMPLETED",
+                relatedOrderId: order._id,
+                description: `Payment released for order #${order._id}`,
+                metadata: {
+                    escrowStatus: "RELEASED",
+                    releasedAt: new Date(),
+                    breakdown: {
+                        itemPrice,
+                        platformFee,
+                        sellerReceived: sellerPayout,
+                    },
+                },
+            });
             // Credit Seller
             yield User_1.User.findByIdAndUpdate(order.sellerId, {
                 $inc: { "wallet.balance": sellerPayout },
             });
             // Credit Inspector (if applicable)
             if (order.inspectorId && inspectionFee > 0) {
+                // Create INSPECTION_FEE transaction for inspector
+                yield Transaction_1.Transaction.create({
+                    userId: order.inspectorId,
+                    type: "INSPECTION_FEE",
+                    amount: inspectionFee,
+                    status: "COMPLETED",
+                    relatedOrderId: order._id,
+                    relatedInspectionId: order.inspectorId, // Will be updated if we have inspection ID
+                    description: `Inspection fee for order #${order._id}`,
+                });
                 yield User_1.User.findByIdAndUpdate(order.inspectorId, {
                     $inc: { "wallet.balance": inspectionFee },
                 });
             }
+            // Create PLATFORM_FEE transaction (for tracking)
+            yield Transaction_1.Transaction.create({
+                userId: order.sellerId, // Track against seller for reference
+                type: "PLATFORM_FEE",
+                amount: platformFee,
+                status: "COMPLETED",
+                relatedOrderId: order._id,
+                description: `Platform fee collected for order #${order._id}`,
+            });
+            // Credit Platform Account (if configured)
+            // Platform receives: platformFee + shippingFee
+            const platformRevenue = platformFee + order.financials.shippingFee;
+            if (PLATFORM_ACCOUNT_ID) {
+                yield User_1.User.findByIdAndUpdate(PLATFORM_ACCOUNT_ID, {
+                    $inc: { "wallet.balance": platformRevenue },
+                });
+                // Create transaction for platform revenue
+                yield Transaction_1.Transaction.create({
+                    userId: PLATFORM_ACCOUNT_ID,
+                    type: "PLATFORM_FEE",
+                    amount: platformRevenue,
+                    status: "COMPLETED",
+                    relatedOrderId: order._id,
+                    description: `Platform revenue for order #${order._id} (fee: ${platformFee}, shipping: ${order.financials.shippingFee})`,
+                    metadata: {
+                        breakdown: {
+                            platformFee,
+                            shippingFee: order.financials.shippingFee,
+                            totalRevenue: platformRevenue,
+                        },
+                    },
+                });
+            }
+            else {
+                console.warn(`[PLATFORM] No PLATFORM_ACCOUNT_ID configured. Platform fee ${platformRevenue} VND not credited to any account.`);
+            }
+            // Update original PAYMENT_HOLD transaction metadata
+            yield Transaction_1.Transaction.findOneAndUpdate({ relatedOrderId: order._id, type: "PAYMENT_HOLD" }, {
+                $set: {
+                    "metadata.escrowStatus": "RELEASED",
+                    "metadata.releasedAt": new Date(),
+                },
+            });
             // Note: Platform Fee and Shipping Fee are retained by the Platform (Company Account)
             // 3. Mark listing as SOLD
             yield Listing_1.Listing.findByIdAndUpdate(order.listingId, { status: "SOLD" });

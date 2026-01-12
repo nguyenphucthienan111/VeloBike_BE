@@ -14,16 +14,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const google_auth_library_1 = require("google-auth-library");
 const User_1 = require("../models/User");
 const Otp_1 = require("../models/Otp");
 const EmailService_1 = require("../services/EmailService");
-function generateToken(user) {
-    const payload = { id: user._id.toString(), role: user.role };
-    const secret = process.env.JWT_SECRET || "dev_secret";
-    return jsonwebtoken_1.default.sign(payload, secret, { expiresIn: "7d" });
-}
+const TokenService_1 = require("../services/TokenService");
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const googleClient = new google_auth_library_1.OAuth2Client(GOOGLE_CLIENT_ID);
 class AuthController {
@@ -65,12 +60,14 @@ class AuthController {
                 // Attempt to send and log result to server console for debugging (useful when requests come from Swagger UI)
                 const _sent = yield EmailService_1.EmailService.sendVerificationEmail(email, newUser.fullName, code);
                 console.log(`AuthController.register: sendVerificationEmail -> ${email} => ${_sent ? "OK" : "FAILED"}`);
-                // Return limited user data; token issued but emailVerified flag false
-                const token = generateToken(newUser);
+                // Return tokens using new TokenService
+                const deviceInfo = TokenService_1.TokenService.extractDeviceInfo(req);
+                const { accessToken, refreshToken } = yield TokenService_1.TokenService.generateTokenPair(newUser, deviceInfo);
                 res.status(201).json({
                     success: true,
                     message: "Tài khoản đã được tạo. Vui lòng kiểm tra email để xác thực.",
-                    token,
+                    accessToken,
+                    refreshToken,
                     user: {
                         id: newUser._id,
                         email: newUser.email,
@@ -116,11 +113,13 @@ class AuthController {
                 yield user.save();
                 // Clean up OTP immediately
                 yield Otp_1.Otp.deleteOne({ _id: record._id });
-                const token = generateToken(user);
+                const deviceInfo = TokenService_1.TokenService.extractDeviceInfo(req);
+                const { accessToken, refreshToken } = yield TokenService_1.TokenService.generateTokenPair(user, deviceInfo);
                 res.json({
                     success: true,
                     message: "Email verified",
-                    token,
+                    accessToken,
+                    refreshToken,
                     user: {
                         id: user._id,
                         email: user.email,
@@ -153,10 +152,12 @@ class AuthController {
                     return res
                         .status(401)
                         .json({ success: false, message: "Invalid credentials" });
-                const token = generateToken(user);
+                const deviceInfo = TokenService_1.TokenService.extractDeviceInfo(req);
+                const { accessToken, refreshToken } = yield TokenService_1.TokenService.generateTokenPair(user, deviceInfo);
                 res.json({
                     success: true,
-                    token,
+                    accessToken,
+                    refreshToken,
                     user: {
                         id: user._id,
                         email: user.email,
@@ -215,10 +216,12 @@ class AuthController {
                     });
                     yield user.save();
                 }
-                const token = generateToken(user);
+                const deviceInfo = TokenService_1.TokenService.extractDeviceInfo(req);
+                const { accessToken, refreshToken } = yield TokenService_1.TokenService.generateTokenPair(user, deviceInfo);
                 res.json({
                     success: true,
-                    token,
+                    accessToken,
+                    refreshToken,
                     user: {
                         id: user._id,
                         email: user.email,
@@ -275,10 +278,12 @@ class AuthController {
                         yield user.save();
                     }
                 }
-                const token = generateToken(user);
+                const deviceInfo = TokenService_1.TokenService.extractDeviceInfo(req);
+                const { accessToken, refreshToken } = yield TokenService_1.TokenService.generateTokenPair(user, deviceInfo);
                 res.json({
                     success: true,
-                    token,
+                    accessToken,
+                    refreshToken,
                     user: {
                         id: user._id,
                         email: user.email,
@@ -346,13 +351,15 @@ class AuthController {
                     });
                     yield user.save();
                 }
-                // Create token
-                const token = generateToken(user);
+                // Create tokens using new TokenService
+                const deviceInfo = TokenService_1.TokenService.extractDeviceInfo(req);
+                const { accessToken, refreshToken } = yield TokenService_1.TokenService.generateTokenPair(user, deviceInfo);
                 // Clean up OTP immediately
                 yield Otp_1.Otp.deleteOne({ _id: record._id });
                 res.json({
                     success: true,
-                    token,
+                    accessToken,
+                    refreshToken,
                     user: {
                         id: user._id,
                         email: user.email,
@@ -440,6 +447,83 @@ class AuthController {
                 yield user.save();
                 yield Otp_1.Otp.deleteOne({ _id: record._id });
                 res.json({ success: true, message: "Password reset successfully" });
+            }
+            catch (err) {
+                res.status(500).json({ success: false, message: err.message });
+            }
+        });
+    }
+    // POST /api/auth/refresh-token
+    // Body: { refreshToken }
+    static refreshToken(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { refreshToken } = req.body;
+                if (!refreshToken) {
+                    return res.status(400).json({ success: false, message: "Refresh token required" });
+                }
+                const { accessToken, user } = yield TokenService_1.TokenService.refreshAccessToken(refreshToken);
+                res.json({
+                    success: true,
+                    accessToken,
+                    user: {
+                        id: user._id,
+                        email: user.email,
+                        fullName: user.fullName,
+                        role: user.role,
+                    },
+                });
+            }
+            catch (err) {
+                res.status(401).json({ success: false, message: err.message });
+            }
+        });
+    }
+    // POST /api/auth/logout
+    // Body: { refreshToken }
+    static logout(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { refreshToken } = req.body;
+                if (!refreshToken) {
+                    return res.status(400).json({ success: false, message: "Refresh token required" });
+                }
+                const revoked = yield TokenService_1.TokenService.revokeRefreshToken(refreshToken);
+                if (!revoked) {
+                    return res.status(400).json({ success: false, message: "Invalid refresh token" });
+                }
+                res.json({ success: true, message: "Logged out successfully" });
+            }
+            catch (err) {
+                res.status(500).json({ success: false, message: err.message });
+            }
+        });
+    }
+    // POST /api/auth/logout-all
+    // Logout from all devices
+    static logoutAll(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const userId = req.user.id; // From auth middleware
+                const revokedCount = yield TokenService_1.TokenService.revokeAllUserTokens(userId);
+                res.json({
+                    success: true,
+                    message: `Logged out from ${revokedCount} devices successfully`
+                });
+            }
+            catch (err) {
+                res.status(500).json({ success: false, message: err.message });
+            }
+        });
+    }
+    // GET /api/auth/sessions
+    // Get user's active sessions
+    static getActiveSessions(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const userId = req.user.id;
+                const sessions = yield TokenService_1.TokenService.getUserActiveSessions(userId);
+                res.json({ success: true, data: sessions });
             }
             catch (err) {
                 res.status(500).json({ success: false, message: err.message });

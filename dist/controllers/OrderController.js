@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OrderController = void 0;
+exports.OrderEscrowController = exports.OrderController = void 0;
 const Order_1 = require("../models/Order");
 const Listing_1 = require("../models/Listing");
 const OrderService_1 = require("../services/OrderService");
@@ -253,4 +253,109 @@ class OrderController {
     }
 }
 exports.OrderController = OrderController;
+// Import Transaction model for escrow status
+const Transaction_1 = require("../models/Transaction");
+class OrderEscrowController {
+    /**
+     * GET /api/orders/:id/escrow-status
+     * Get escrow status and transaction history for an order
+     */
+    static getEscrowStatus(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b;
+            try {
+                const { id } = req.params;
+                const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                const userRole = (_b = req.user) === null || _b === void 0 ? void 0 : _b.role;
+                const order = yield Order_1.Order.findById(id)
+                    .populate("buyerId", "fullName")
+                    .populate("sellerId", "fullName");
+                if (!order) {
+                    return res.status(404).json({ success: false, message: "Order not found" });
+                }
+                // Check authorization
+                const isAuthorized = userRole === User_1.UserRole.ADMIN ||
+                    order.buyerId.toString() === userId ||
+                    order.sellerId.toString() === userId;
+                if (!isAuthorized) {
+                    return res.status(403).json({ success: false, message: "Not authorized" });
+                }
+                // Get all transactions related to this order
+                const transactions = yield Transaction_1.Transaction.find({ relatedOrderId: id })
+                    .sort({ createdAt: 1 });
+                // Determine escrow status
+                const holdTransaction = transactions.find(t => t.type === "PAYMENT_HOLD");
+                const releaseTransaction = transactions.find(t => t.type === "PAYMENT_RELEASE");
+                const refundTransaction = transactions.find(t => t.type === "REFUND");
+                let escrowStatus = "NOT_PAID";
+                if (refundTransaction) {
+                    escrowStatus = "REFUNDED";
+                }
+                else if (releaseTransaction) {
+                    escrowStatus = "RELEASED";
+                }
+                else if (holdTransaction) {
+                    escrowStatus = "LOCKED";
+                }
+                // Calculate amounts
+                const { itemPrice, platformFee, inspectionFee, shippingFee, totalAmount } = order.financials;
+                const sellerWillReceive = itemPrice - platformFee;
+                res.json({
+                    success: true,
+                    data: {
+                        orderId: id,
+                        orderStatus: order.status,
+                        escrowStatus,
+                        financials: {
+                            totalAmount,
+                            itemPrice,
+                            platformFee,
+                            inspectionFee,
+                            shippingFee,
+                            sellerWillReceive,
+                            platformWillReceive: platformFee + shippingFee,
+                            inspectorWillReceive: inspectionFee,
+                        },
+                        timeline: {
+                            paidAt: (holdTransaction === null || holdTransaction === void 0 ? void 0 : holdTransaction.createdAt) || null,
+                            releasedAt: (releaseTransaction === null || releaseTransaction === void 0 ? void 0 : releaseTransaction.createdAt) || null,
+                            refundedAt: (refundTransaction === null || refundTransaction === void 0 ? void 0 : refundTransaction.createdAt) || null,
+                        },
+                        transactions: transactions.map(t => ({
+                            id: t._id,
+                            type: t.type,
+                            amount: t.amount,
+                            status: t.status,
+                            description: t.description,
+                            createdAt: t.createdAt,
+                            paymentGatewayRef: t.paymentGatewayRef,
+                        })),
+                        message: this.getEscrowMessage(escrowStatus, order.status),
+                    },
+                });
+            }
+            catch (error) {
+                res.status(500).json({ success: false, message: error.message });
+            }
+        });
+    }
+    /**
+     * Helper: Get human-readable escrow message
+     */
+    static getEscrowMessage(escrowStatus, orderStatus) {
+        switch (escrowStatus) {
+            case "NOT_PAID":
+                return "Đơn hàng chưa được thanh toán. Tiền chưa vào hệ thống.";
+            case "LOCKED":
+                return "Tiền đang được giữ an toàn trên PayOS. Seller sẽ nhận tiền sau khi đơn hàng hoàn tất.";
+            case "RELEASED":
+                return "Tiền đã được chuyển cho Seller. Giao dịch hoàn tất.";
+            case "REFUNDED":
+                return "Tiền đã được hoàn lại cho Buyer.";
+            default:
+                return "";
+        }
+    }
+}
+exports.OrderEscrowController = OrderEscrowController;
 //# sourceMappingURL=OrderController.js.map

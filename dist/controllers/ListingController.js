@@ -11,6 +11,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ListingController = void 0;
 const Listing_1 = require("../models/Listing");
+const SubscriptionService_1 = require("../services/SubscriptionService");
 class ListingController {
     // GET /api/listings
     static getAll(req, res) {
@@ -68,12 +69,78 @@ class ListingController {
                         .status(401)
                         .json({ success: false, message: "Unauthorized" });
                 }
+                // Check subscription quota before creating listing
+                const quotaCheck = yield SubscriptionService_1.SubscriptionService.canCreateListing(sellerId);
+                if (!quotaCheck.canCreate) {
+                    return res.status(403).json({
+                        success: false,
+                        message: quotaCheck.reason,
+                        data: {
+                            used: quotaCheck.used,
+                            limit: quotaCheck.limit,
+                            planType: quotaCheck.planType,
+                            upgradeUrl: "/api/subscriptions/plans",
+                        },
+                    });
+                }
                 const newListing = new Listing_1.Listing(Object.assign(Object.assign({}, req.body), { sellerId: sellerId, status: "DRAFT" }));
                 yield newListing.save();
-                res.status(201).json({ success: true, data: newListing });
+                // Increment listing count for subscription
+                yield SubscriptionService_1.SubscriptionService.incrementListingCount(sellerId);
+                res.status(201).json({
+                    success: true,
+                    data: newListing,
+                    message: "Listing created as draft. Use PUT /api/listings/:id to submit for approval.",
+                    quota: {
+                        used: quotaCheck.used + 1,
+                        limit: quotaCheck.limit,
+                        planType: quotaCheck.planType,
+                    },
+                });
             }
             catch (error) {
                 res.status(400).json({ success: false, message: error.message });
+            }
+        });
+    }
+    // PUT /api/listings/:id/submit-approval
+    // Submit listing for admin approval (SRS requirement)
+    static submitForApproval(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            try {
+                const { id } = req.params;
+                const sellerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                if (!sellerId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
+                const listing = yield Listing_1.Listing.findById(id);
+                if (!listing) {
+                    return res.status(404).json({ success: false, message: "Listing not found" });
+                }
+                // Check ownership
+                if (listing.sellerId.toString() !== sellerId) {
+                    return res.status(403).json({ success: false, message: "Not authorized to update this listing" });
+                }
+                // Only allow submission from DRAFT status
+                if (listing.status !== "DRAFT") {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Cannot submit listing with status ${listing.status} for approval`
+                    });
+                }
+                // Update status to PENDING_APPROVAL per SRS BikeMarket
+                listing.status = Listing_1.ListingStatus.PENDING_APPROVAL;
+                yield listing.save();
+                // TODO: Send notification to admin about new listing pending approval
+                res.json({
+                    success: true,
+                    data: listing,
+                    message: "Listing submitted for admin approval per SRS BikeMarket workflow"
+                });
+            }
+            catch (error) {
+                res.status(500).json({ success: false, message: error.message });
             }
         });
     }

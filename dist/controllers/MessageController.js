@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MessageController = void 0;
 const Message_1 = require("../models/Message");
+const Conversation_1 = require("../models/Conversation");
 const mongoose_1 = __importDefault(require("mongoose"));
 class MessageController {
     /**
@@ -26,7 +27,7 @@ class MessageController {
                 const { userId } = req.params;
                 const currentUserId = req.userId;
                 const { listingId, orderId } = req.query;
-                const conversation = yield Message_1.Conversation.findOne({
+                const conversation = yield Conversation_1.Conversation.findOne({
                     $or: [
                         { buyerId: currentUserId, sellerId: userId },
                         { buyerId: userId, sellerId: currentUserId },
@@ -39,7 +40,7 @@ class MessageController {
                     });
                 }
                 // Create new conversation
-                const newConversation = new Message_1.Conversation({
+                const newConversation = new Conversation_1.Conversation({
                     buyerId: currentUserId,
                     sellerId: userId,
                     listingId: listingId || undefined,
@@ -73,7 +74,7 @@ class MessageController {
                 const { conversationId, receiverId, content, attachments } = req.body;
                 const senderId = req.userId;
                 // Verify conversation exists
-                const conversation = yield Message_1.Conversation.findById(conversationId);
+                const conversation = yield Conversation_1.Conversation.findById(conversationId);
                 if (!conversation) {
                     return res
                         .status(404)
@@ -89,7 +90,7 @@ class MessageController {
                 });
                 yield message.save();
                 // Update conversation
-                yield Message_1.Conversation.findByIdAndUpdate(conversationId, {
+                yield Conversation_1.Conversation.findByIdAndUpdate(conversationId, {
                     lastMessage: content,
                     lastMessageAt: new Date(),
                 });
@@ -172,7 +173,7 @@ class MessageController {
             try {
                 const userId = req.userId;
                 const { page = 1, limit = 20 } = req.query;
-                const conversations = yield Message_1.Conversation.find({
+                const conversations = yield Conversation_1.Conversation.find({
                     $or: [{ buyerId: userId }, { sellerId: userId }],
                     isActive: true,
                 })
@@ -182,7 +183,7 @@ class MessageController {
                     .sort({ lastMessageAt: -1 })
                     .skip((Number(page) - 1) * Number(limit))
                     .limit(Number(limit));
-                const total = yield Message_1.Conversation.countDocuments({
+                const total = yield Conversation_1.Conversation.countDocuments({
                     $or: [{ buyerId: userId }, { sellerId: userId }],
                     isActive: true,
                 });
@@ -313,7 +314,7 @@ class MessageController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { conversationId } = req.params;
-                const conversation = yield Message_1.Conversation.findByIdAndUpdate(conversationId, { isActive: false }, { new: true });
+                const conversation = yield Conversation_1.Conversation.findByIdAndUpdate(conversationId, { isActive: false }, { new: true });
                 res.status(200).json({
                     success: true,
                     message: "Conversation closed",

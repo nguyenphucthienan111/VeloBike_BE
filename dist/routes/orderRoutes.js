@@ -129,6 +129,44 @@ exports.orderRoutes.get("/:id/timeline", authMiddleware_1.protect, OrderControll
  *       - bearerAuth: []
  */
 exports.orderRoutes.put("/:id/status", authMiddleware_1.protect, OrderController_1.OrderController.updateStatus);
+/**
+ * @swagger
+ * /api/orders/{id}/escrow-status:
+ *   get:
+ *     summary: Get escrow status and transaction history for an order
+ *     description: Returns detailed information about the escrow status, including whether money is locked, released, or refunded
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Order ID
+ *     responses:
+ *       200:
+ *         description: Escrow status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     escrowStatus:
+ *                       type: string
+ *                       enum: [NOT_PAID, LOCKED, RELEASED, REFUNDED]
+ *                     financials:
+ *                       type: object
+ *                     transactions:
+ *                       type: array
+ */
+exports.orderRoutes.get("/:id/escrow-status", authMiddleware_1.protect, OrderController_1.OrderEscrowController.getEscrowStatus);
 // Generic transition endpoint (for advanced use)
 exports.orderRoutes.post("/:id/transition", authMiddleware_1.protect, transitionHandler);
 //# sourceMappingURL=orderRoutes.js.map

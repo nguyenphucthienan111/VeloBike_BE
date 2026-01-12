@@ -5,6 +5,10 @@ import { Transaction } from "../models/Transaction";
 import mongoose, { Types } from "mongoose";
 
 import { NotificationService } from "./NotificationService";
+import { SubscriptionService } from "./SubscriptionService";
+
+// Platform account ID - should be set in .env or created during system setup
+const PLATFORM_ACCOUNT_ID = process.env.PLATFORM_ACCOUNT_ID || null;
 
 export class OrderService {
   /**
@@ -120,8 +124,11 @@ export class OrderService {
       throw new Error("This item is already sold");
     }
 
+    // Get seller's commission rate from subscription
+    const commissionRate = await SubscriptionService.getCommissionRate(listing.sellerId.toString());
+    
     const shippingFee = 150000; // Example: VND
-    const platformFee = Math.ceil(listing.pricing.amount * 0.1); // 10%
+    const platformFee = Math.ceil(listing.pricing.amount * commissionRate); // Dynamic based on subscription
 
     const order = new Order({
       listingId: new Types.ObjectId(listingId),
@@ -334,6 +341,34 @@ export class OrderService {
       relatedOrderId: order._id,
       description: `Platform fee collected for order #${order._id}`,
     });
+
+    // Credit Platform Account (if configured)
+    // Platform receives: platformFee + shippingFee
+    const platformRevenue = platformFee + order.financials.shippingFee;
+    if (PLATFORM_ACCOUNT_ID) {
+      await User.findByIdAndUpdate(PLATFORM_ACCOUNT_ID, {
+        $inc: { "wallet.balance": platformRevenue },
+      });
+
+      // Create transaction for platform revenue
+      await Transaction.create({
+        userId: PLATFORM_ACCOUNT_ID,
+        type: "PLATFORM_FEE",
+        amount: platformRevenue,
+        status: "COMPLETED",
+        relatedOrderId: order._id,
+        description: `Platform revenue for order #${order._id} (fee: ${platformFee}, shipping: ${order.financials.shippingFee})`,
+        metadata: {
+          breakdown: {
+            platformFee,
+            shippingFee: order.financials.shippingFee,
+            totalRevenue: platformRevenue,
+          },
+        },
+      });
+    } else {
+      console.warn(`[PLATFORM] No PLATFORM_ACCOUNT_ID configured. Platform fee ${platformRevenue} VND not credited to any account.`);
+    }
 
     // Update original PAYMENT_HOLD transaction metadata
     await Transaction.findOneAndUpdate(
