@@ -70,3 +70,6 @@ export const authorize = (...roles: UserRole[]) => {
     next();
   };
 };
+
+// Alias for authorize (used in some routes)
+export const requireRole = authorize;

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Listing } from "../models/Listing";
+import { Listing, ListingStatus } from "../models/Listing";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { ChatbotService } from "../services/ChatbotService"; // Reuse AI service
 
@@ -108,7 +108,7 @@ export class ListingController {
       }
 
       // Update status to PENDING_APPROVAL per SRS BikeMarket
-      listing.status = "PENDING_APPROVAL";
+      listing.status = ListingStatus.PENDING_APPROVAL;
       await listing.save();
 
       // TODO: Send notification to admin about new listing pending approval
