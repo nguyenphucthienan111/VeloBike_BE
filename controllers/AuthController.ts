@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { OAuth2Client } from "google-auth-library";
+import { v2 as cloudinary } from "cloudinary";
 import { User, UserRole, KycStatus } from "../models/User";
 import { Otp } from "../models/Otp";
 import { EmailService } from "../services/EmailService";
@@ -604,6 +605,84 @@ export class AuthController {
 
       res.json({ success: true, message: "KYC data submitted for review" });
     } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // POST /api/auth/kyc-upload
+  // Upload KYC documents with file upload (multipart/form-data)
+  static async submitKycWithUpload(req: any, res: Response) {
+    try {
+      const { documentType, documentId } = req.body;
+      const userId = req.user.id;
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+
+      if (!documentType || !documentId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "documentType và documentId là bắt buộc" 
+        });
+      }
+
+      if (!files?.frontImage?.[0] || !files?.backImage?.[0]) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Vui lòng upload cả ảnh mặt trước và mặt sau" 
+        });
+      }
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      // Configure Cloudinary
+      cloudinary.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET,
+      });
+
+      // Upload both images to Cloudinary
+      const [frontResult, backResult] = await Promise.all([
+        cloudinary.uploader.upload(files.frontImage[0].path, {
+          folder: "velobike_kyc",
+          resource_type: "image",
+        }),
+        cloudinary.uploader.upload(files.backImage[0].path, {
+          folder: "velobike_kyc",
+          resource_type: "image",
+        }),
+      ]);
+
+      // Save KYC data
+      user.kycData = {
+        documentType,
+        documentId,
+        frontImage: frontResult.secure_url,
+        backImage: backResult.secure_url,
+        verifiedAt: undefined,
+      };
+
+      if (user.kycStatus !== KycStatus.VERIFIED) {
+        user.kycStatus = KycStatus.PENDING;
+      }
+
+      await user.save();
+
+      res.json({ 
+        success: true, 
+        message: "KYC đã được gửi thành công, vui lòng chờ Admin duyệt",
+        data: {
+          documentType,
+          documentId,
+          frontImage: frontResult.secure_url,
+          backImage: backResult.secure_url,
+          status: user.kycStatus,
+        }
+      });
+    } catch (err: any) {
+      console.error("KYC Upload Error:", err);
       res.status(500).json({ success: false, message: err.message });
     }
   }

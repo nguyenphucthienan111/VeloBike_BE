@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { WishlistController } from "../controllers/WishlistController";
+import { protect } from "../middleware/authMiddleware";
 
 export const wishlistRoutes = Router();
 
@@ -26,7 +27,7 @@ export const wishlistRoutes = Router();
  *       201:
  *         description: Added to wishlist
  */
-wishlistRoutes.post("/", WishlistController.addToWishlist as any);
+wishlistRoutes.post("/", protect, WishlistController.addToWishlist as any);
 
 /**
  * @swagger
@@ -54,7 +55,7 @@ wishlistRoutes.post("/", WishlistController.addToWishlist as any);
  *       200:
  *         description: Wishlist items
  */
-wishlistRoutes.get("/", WishlistController.getWishlist as any);
+wishlistRoutes.get("/", protect, WishlistController.getWishlist as any);
 
 /**
  * @swagger
@@ -74,7 +75,7 @@ wishlistRoutes.get("/", WishlistController.getWishlist as any);
  *       200:
  *         description: Check result
  */
-wishlistRoutes.get("/check/:listingId", WishlistController.checkWishlist as any);
+wishlistRoutes.get("/check/:listingId", protect, WishlistController.checkWishlist as any);
 
 /**
  * @swagger
@@ -88,7 +89,21 @@ wishlistRoutes.get("/check/:listingId", WishlistController.checkWishlist as any)
  *       200:
  *         description: Wishlist count
  */
-wishlistRoutes.get("/count", WishlistController.getWishlistCount as any);
+wishlistRoutes.get("/count", protect, WishlistController.getWishlistCount as any);
+
+/**
+ * @swagger
+ * /api/wishlist/clear:
+ *   delete:
+ *     summary: Clear all wishlist items
+ *     tags: [Wishlist]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Wishlist cleared
+ */
+wishlistRoutes.delete("/clear", protect, WishlistController.clearWishlist as any);
 
 /**
  * @swagger
@@ -108,18 +123,4 @@ wishlistRoutes.get("/count", WishlistController.getWishlistCount as any);
  *       200:
  *         description: Removed from wishlist
  */
-wishlistRoutes.delete("/:listingId", WishlistController.removeFromWishlist as any);
-
-/**
- * @swagger
- * /api/wishlist/clear:
- *   delete:
- *     summary: Clear all wishlist items
- *     tags: [Wishlist]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Wishlist cleared
- */
-wishlistRoutes.delete("/clear", WishlistController.clearWishlist as any);
+wishlistRoutes.delete("/:listingId", protect, WishlistController.removeFromWishlist as any);

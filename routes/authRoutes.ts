@@ -1,7 +1,10 @@
 import { Router } from "express";
+import multer from "multer";
 import { AuthController } from "../controllers/AuthController";
 import { validationRules, validate } from "../middleware/validationMiddleware";
 import { protect } from "../middleware/authMiddleware";
+
+const upload = multer({ dest: "uploads/" });
 
 export const authRoutes = Router();
 
@@ -265,7 +268,7 @@ authRoutes.post("/reset-password", AuthController.resetPassword as any);
  * @swagger
  * /api/auth/kyc-submit:
  *   post:
- *     summary: Submit KYC documents (Seller only)
+ *     summary: Submit KYC documents (Seller only) - JSON with URLs
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
@@ -295,6 +298,55 @@ authRoutes.post("/reset-password", AuthController.resetPassword as any);
  *         description: KYC submitted
  */
 authRoutes.post("/kyc-submit", protect, AuthController.submitKyc as any);
+
+/**
+ * @swagger
+ * /api/auth/kyc-upload:
+ *   post:
+ *     summary: Submit KYC with file upload (Seller only)
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - documentType
+ *               - documentId
+ *               - frontImage
+ *               - backImage
+ *             properties:
+ *               documentType:
+ *                 type: string
+ *                 enum: [CCCD, CMND, PASSPORT]
+ *                 description: Loại giấy tờ
+ *               documentId:
+ *                 type: string
+ *                 description: Số CCCD/CMND/Passport
+ *               frontImage:
+ *                 type: string
+ *                 format: binary
+ *                 description: Ảnh mặt trước
+ *               backImage:
+ *                 type: string
+ *                 format: binary
+ *                 description: Ảnh mặt sau
+ *     responses:
+ *       200:
+ *         description: KYC submitted successfully
+ */
+authRoutes.post(
+  "/kyc-upload",
+  protect,
+  upload.fields([
+    { name: "frontImage", maxCount: 1 },
+    { name: "backImage", maxCount: 1 }
+  ]) as any,
+  AuthController.submitKycWithUpload as any
+);
 
 /**
  * @swagger

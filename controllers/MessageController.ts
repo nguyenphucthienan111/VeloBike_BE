@@ -12,8 +12,12 @@ export class MessageController {
   static async getOrCreateConversation(req: Request, res: Response) {
     try {
       const { userId } = req.params;
-      const currentUserId = (req as any).userId;
+      const currentUserId = (req as any).user?.id;
       const { listingId, orderId } = req.query;
+
+      if (!currentUserId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
 
       const conversation = await Conversation.findOne({
         $or: [
@@ -29,10 +33,27 @@ export class MessageController {
         });
       }
 
+      // Determine buyer/seller based on user roles
+      const currentUser = await User.findById(currentUserId);
+      const otherUser = await User.findById(userId);
+      
+      let buyerId, sellerId;
+      if (currentUser?.role === "BUYER") {
+        buyerId = currentUserId;
+        sellerId = userId;
+      } else if (currentUser?.role === "SELLER") {
+        buyerId = userId;
+        sellerId = currentUserId;
+      } else {
+        // Default: current user is buyer
+        buyerId = currentUserId;
+        sellerId = userId;
+      }
+
       // Create new conversation
       const newConversation = new Conversation({
-        buyerId: currentUserId,
-        sellerId: userId,
+        buyerId,
+        sellerId,
         listingId: listingId || undefined,
         orderId: orderId || undefined,
       });
@@ -62,7 +83,11 @@ export class MessageController {
   static async sendMessage(req: Request, res: Response) {
     try {
       const { conversationId, receiverId, content, attachments } = req.body;
-      const senderId = (req as any).userId;
+      const senderId = (req as any).user?.id;
+
+      if (!senderId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
 
       // Verify conversation exists
       const conversation = await Conversation.findById(conversationId);
@@ -115,12 +140,13 @@ export class MessageController {
 
   /**
    * Get messages in conversation
-   * GET /api/messages/conversation/:conversationId
+   * GET /api/messages/list/:conversationId
    */
   static async getMessages(req: Request, res: Response) {
     try {
       const { conversationId } = req.params;
       const { page = 1, limit = 50 } = req.query;
+      const userId = (req as any).user?.id;
 
       const messages = await Message.find({ conversationId })
         .populate("senderId", "fullName avatar")
@@ -131,17 +157,19 @@ export class MessageController {
       const total = await Message.countDocuments({ conversationId });
 
       // Mark messages as read
-      await Message.updateMany(
-        {
-          conversationId,
-          receiverId: (req as any).userId,
-          isRead: false,
-        },
-        {
-          isRead: true,
-          readAt: new Date(),
-        }
-      );
+      if (userId) {
+        await Message.updateMany(
+          {
+            conversationId,
+            receiverId: userId,
+            isRead: false,
+          },
+          {
+            isRead: true,
+            readAt: new Date(),
+          }
+        );
+      }
 
       res.status(200).json({
         success: true,
@@ -170,8 +198,12 @@ export class MessageController {
    */
   static async getUserConversations(req: Request, res: Response) {
     try {
-      const userId = (req as any).userId;
+      const userId = (req as any).user?.id;
       const { page = 1, limit = 20 } = req.query;
+
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
 
       const conversations = await Conversation.find({
         $or: [{ buyerId: userId }, { sellerId: userId }],
@@ -216,7 +248,11 @@ export class MessageController {
    */
   static async getUnreadCount(req: Request, res: Response) {
     try {
-      const userId = (req as any).userId;
+      const userId = (req as any).user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
 
       const count = await Message.countDocuments({
         receiverId: userId,
@@ -277,7 +313,11 @@ export class MessageController {
   static async deleteMessage(req: Request, res: Response) {
     try {
       const { messageId } = req.params;
-      const userId = (req as any).userId;
+      const userId = (req as any).user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
 
       const message = await Message.findById(messageId);
       if (!message) {

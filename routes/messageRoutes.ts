@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { MessageController } from "../controllers/MessageController";
+import { protect } from "../middleware/authMiddleware";
 
 export const messageRoutes = Router();
 
@@ -29,7 +30,7 @@ export const messageRoutes = Router();
  *       200:
  *         description: Conversation retrieved or created
  */
-messageRoutes.get("/conversation/:userId", MessageController.getOrCreateConversation as any);
+messageRoutes.get("/conversation/:userId", protect, MessageController.getOrCreateConversation as any);
 
 /**
  * @swagger
@@ -64,7 +65,7 @@ messageRoutes.get("/conversation/:userId", MessageController.getOrCreateConversa
  *       201:
  *         description: Message sent
  */
-messageRoutes.post("/", MessageController.sendMessage as any);
+messageRoutes.post("/", protect, MessageController.sendMessage as any);
 
 /**
  * @swagger
@@ -92,7 +93,7 @@ messageRoutes.post("/", MessageController.sendMessage as any);
  *       200:
  *         description: Messages list
  */
-messageRoutes.get("/list/:conversationId", MessageController.getMessages as any);
+messageRoutes.get("/list/:conversationId", protect, MessageController.getMessages as any);
 
 /**
  * @swagger
@@ -115,7 +116,7 @@ messageRoutes.get("/list/:conversationId", MessageController.getMessages as any)
  *       200:
  *         description: Conversations list
  */
-messageRoutes.get("/conversations", MessageController.getUserConversations as any);
+messageRoutes.get("/conversations", protect, MessageController.getUserConversations as any);
 
 /**
  * @swagger
@@ -129,7 +130,7 @@ messageRoutes.get("/conversations", MessageController.getUserConversations as an
  *       200:
  *         description: Unread count
  */
-messageRoutes.get("/unread", MessageController.getUnreadCount as any);
+messageRoutes.get("/unread", protect, MessageController.getUnreadCount as any);
 
 /**
  * @swagger
@@ -149,7 +150,7 @@ messageRoutes.get("/unread", MessageController.getUnreadCount as any);
  *       200:
  *         description: Message marked as read
  */
-messageRoutes.put("/:messageId/read", MessageController.markAsRead as any);
+messageRoutes.put("/:messageId/read", protect, MessageController.markAsRead as any);
 
 /**
  * @swagger
@@ -169,7 +170,7 @@ messageRoutes.put("/:messageId/read", MessageController.markAsRead as any);
  *       200:
  *         description: Message deleted
  */
-messageRoutes.delete("/:messageId", MessageController.deleteMessage as any);
+messageRoutes.delete("/:messageId", protect, MessageController.deleteMessage as any);
 
 /**
  * @swagger
@@ -189,4 +190,4 @@ messageRoutes.delete("/:messageId", MessageController.deleteMessage as any);
  *       200:
  *         description: Conversation closed
  */
-messageRoutes.put("/conversation/:conversationId/close", MessageController.closeConversation as any);
+messageRoutes.put("/conversation/:conversationId/close", protect, MessageController.closeConversation as any);

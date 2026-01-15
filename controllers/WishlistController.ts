@@ -11,7 +11,11 @@ export class WishlistController {
   static async addToWishlist(req: Request, res: Response) {
     try {
       const { listingId } = req.body;
-      const buyerId = (req as any).userId;
+      const buyerId = (req as any).user?.id;
+
+      if (!buyerId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
 
       // Check if listing exists
       const listing = await Listing.findById(listingId);
@@ -57,7 +61,11 @@ export class WishlistController {
   static async removeFromWishlist(req: Request, res: Response) {
     try {
       const { listingId } = req.params;
-      const buyerId = (req as any).userId;
+      const buyerId = (req as any).user?.id;
+
+      if (!buyerId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
 
       const wishlist = await Wishlist.findOneAndDelete({
         buyerId,
@@ -85,7 +93,12 @@ export class WishlistController {
    */
   static async getWishlist(req: Request, res: Response) {
     try {
-      const buyerId = (req as any).userId;
+      const buyerId = (req as any).user?.id;
+      
+      if (!buyerId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
       const { page = 1, limit = 20, sort = "-addedAt" } = req.query;
 
       const wishlistItems = await Wishlist.find({ buyerId })
@@ -128,7 +141,11 @@ export class WishlistController {
   static async checkWishlist(req: Request, res: Response) {
     try {
       const { listingId } = req.params;
-      const buyerId = (req as any).userId;
+      const buyerId = (req as any).user?.id;
+
+      if (!buyerId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
 
       const wishlist = await Wishlist.findOne({
         buyerId,
@@ -150,17 +167,22 @@ export class WishlistController {
 
   /**
    * Clear wishlist
-   * DELETE /api/wishlist
+   * DELETE /api/wishlist/clear
    */
   static async clearWishlist(req: Request, res: Response) {
     try {
-      const buyerId = (req as any).userId;
+      const buyerId = (req as any).user?.id;
 
-      await Wishlist.deleteMany({ buyerId });
+      if (!buyerId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const result = await Wishlist.deleteMany({ buyerId });
 
       res.status(200).json({
         success: true,
         message: "Wishlist cleared",
+        deletedCount: result.deletedCount,
       });
     } catch (error: any) {
       res
@@ -175,7 +197,11 @@ export class WishlistController {
    */
   static async getWishlistCount(req: Request, res: Response) {
     try {
-      const buyerId = (req as any).userId;
+      const buyerId = (req as any).user?.id;
+
+      if (!buyerId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
 
       const count = await Wishlist.countDocuments({ buyerId });
 

@@ -149,6 +149,91 @@ const swaggerOptions = {
           bearerFormat: "JWT",
         },
       },
+      schemas: {
+        User: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            email: { type: "string" },
+            fullName: { type: "string" },
+            role: { type: "string", enum: ["BUYER", "SELLER", "INSPECTOR", "ADMIN"] },
+            avatar: { type: "string" },
+            phone: { type: "string" },
+            kycStatus: { type: "string", enum: ["PENDING", "VERIFIED", "REJECTED"] },
+            emailVerified: { type: "boolean" },
+            createdAt: { type: "string", format: "date-time" },
+          },
+        },
+        Listing: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            sellerId: { type: "string" },
+            title: { type: "string" },
+            description: { type: "string" },
+            type: { type: "string", enum: ["ROAD", "MTB", "GRAVEL", "TRIATHLON", "E_BIKE"] },
+            status: { type: "string", enum: ["DRAFT", "PENDING_APPROVAL", "PUBLISHED", "REJECTED", "IN_INSPECTION", "SOLD"] },
+            generalInfo: {
+              type: "object",
+              properties: {
+                brand: { type: "string" },
+                model: { type: "string" },
+                year: { type: "number" },
+                size: { type: "string" },
+                condition: { type: "string", enum: ["NEW", "LIKE_NEW", "GOOD", "FAIR", "PARTS"] },
+              },
+            },
+            specs: {
+              type: "object",
+              properties: {
+                frameMaterial: { type: "string" },
+                groupset: { type: "string" },
+                wheelset: { type: "string" },
+                brakeType: { type: "string" },
+                weight: { type: "number" },
+              },
+            },
+            pricing: {
+              type: "object",
+              properties: {
+                amount: { type: "number" },
+                currency: { type: "string" },
+                originalPrice: { type: "number" },
+              },
+            },
+            media: {
+              type: "object",
+              properties: {
+                thumbnails: { type: "array", items: { type: "string" } },
+                spin360Urls: { type: "array", items: { type: "string" } },
+                videoUrl: { type: "string" },
+              },
+            },
+            location: {
+              type: "object",
+              properties: {
+                type: { type: "string" },
+                coordinates: { type: "array", items: { type: "number" } },
+                address: { type: "string" },
+              },
+            },
+            views: { type: "number" },
+            createdAt: { type: "string", format: "date-time" },
+          },
+        },
+        Order: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            buyerId: { type: "string" },
+            sellerId: { type: "string" },
+            listingId: { type: "string" },
+            status: { type: "string" },
+            totalAmount: { type: "number" },
+            createdAt: { type: "string", format: "date-time" },
+          },
+        },
+      },
     },
   },
   apis: [routesPath],
