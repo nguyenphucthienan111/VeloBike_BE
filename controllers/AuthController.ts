@@ -64,15 +64,10 @@ export class AuthController {
         }`
       );
 
-      // Return tokens using new TokenService
-      const deviceInfo = TokenService.extractDeviceInfo(req);
-      const { accessToken, refreshToken } = await TokenService.generateTokenPair(newUser, deviceInfo);
-      
+      // Don't return tokens until email is verified
       res.status(201).json({
         success: true,
         message: "Tài khoản đã được tạo. Vui lòng kiểm tra email để xác thực.",
-        accessToken,
-        refreshToken,
         user: {
           id: newUser._id,
           email: newUser.email,
@@ -163,6 +158,13 @@ export class AuthController {
         return res
           .status(401)
           .json({ success: false, message: "Invalid credentials" });
+
+      // Check if email is verified
+      if (!(user as any).emailVerified) {
+        return res
+          .status(403)
+          .json({ success: false, message: "Vui lòng xác thực email trước khi đăng nhập" });
+      }
 
       const deviceInfo = TokenService.extractDeviceInfo(req);
       const { accessToken, refreshToken } = await TokenService.generateTokenPair(user, deviceInfo);
