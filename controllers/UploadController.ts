@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { v2 as cloudinary } from "cloudinary";
+import { Upload } from "../models/Upload";
 
 // Helper to configure cloudinary
 const configureCloudinary = () => {
@@ -18,10 +19,27 @@ export class UploadController {
         return;
       }
 
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
       configureCloudinary();
 
       const result = await cloudinary.uploader.upload(req.file.path, {
         folder: "velobike_listings",
+      });
+
+      // Save to database
+      await Upload.create({
+        userId,
+        publicId: result.public_id,
+        url: result.secure_url,
+        folder: "velobike_listings",
+        width: result.width,
+        height: result.height,
+        format: result.format,
+        size: result.bytes,
       });
 
       res.json({
@@ -42,6 +60,11 @@ export class UploadController {
         return res.status(400).json({ success: false, message: "No files uploaded" });
       }
 
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
       configureCloudinary();
 
       const uploadPromises = req.files.map((file: any) => 
@@ -49,6 +72,20 @@ export class UploadController {
       );
 
       const results = await Promise.all(uploadPromises);
+      
+      // Save all to database
+      const uploadDocs = results.map((r: any) => ({
+        userId,
+        publicId: r.public_id,
+        url: r.secure_url,
+        folder: "velobike_360",
+        width: r.width,
+        height: r.height,
+        format: r.format,
+        size: r.bytes,
+      }));
+      await Upload.insertMany(uploadDocs);
+
       const urls = results.map((r: any) => r.secure_url);
 
       res.json({
@@ -62,35 +99,42 @@ export class UploadController {
     }
   }
 
-  // GET /api/upload/my-images - List all uploaded images
+  // GET /api/upload/my-images - List user's uploaded images only
   static async getMyImages(req: any, res: Response) {
     try {
-      configureCloudinary();
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
 
-      const folder = (req.query.folder as string) || "velobike_listings";
+      const folder = req.query.folder as string;
       const limit = parseInt(req.query.limit as string) || 50;
 
-      const result = await cloudinary.search
-        .expression(`folder:${folder}`)
-        .sort_by("created_at", "desc")
-        .max_results(limit)
-        .execute();
+      // Query from database - only user's images
+      const query: any = { userId };
+      if (folder) {
+        query.folder = folder;
+      }
 
-      const images = result.resources.map((img: any) => ({
-        public_id: img.public_id,
-        url: img.secure_url,
-        width: img.width,
-        height: img.height,
-        format: img.format,
-        size: img.bytes,
-        createdAt: img.created_at,
-      }));
+      const images = await Upload.find(query)
+        .sort({ createdAt: -1 })
+        .limit(limit);
+
+      const total = await Upload.countDocuments(query);
 
       res.json({
         success: true,
         count: images.length,
-        total: result.total_count,
-        data: images,
+        total,
+        data: images.map(img => ({
+          public_id: img.publicId,
+          url: img.url,
+          width: img.width,
+          height: img.height,
+          format: img.format,
+          size: img.size,
+          createdAt: img.createdAt,
+        })),
       });
     } catch (error: any) {
       console.error("Get images error:", error);
@@ -98,26 +142,43 @@ export class UploadController {
     }
   }
 
-  // DELETE /api/upload/:publicId - Delete an image
+  // DELETE /api/upload/:publicId - Delete an image (only owner can delete)
   static async deleteImage(req: any, res: Response) {
     try {
       const { publicId } = req.params;
+      const userId = req.user?.id;
       
       if (!publicId) {
         return res.status(400).json({ success: false, message: "Public ID is required" });
       }
 
-      configureCloudinary();
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
 
       // Decode the publicId (it may contain slashes encoded as %2F)
       const decodedPublicId = decodeURIComponent(publicId);
       
+      // Check ownership
+      const upload = await Upload.findOne({ publicId: decodedPublicId });
+      if (!upload) {
+        return res.status(404).json({ success: false, message: "Image not found" });
+      }
+
+      if (upload.userId.toString() !== userId && req.user?.role !== "ADMIN") {
+        return res.status(403).json({ success: false, message: "Bạn không có quyền xóa ảnh này" });
+      }
+
+      configureCloudinary();
+      
       const result = await cloudinary.uploader.destroy(decodedPublicId);
 
-      if (result.result === "ok") {
+      if (result.result === "ok" || result.result === "not found") {
+        // Remove from database
+        await Upload.deleteOne({ publicId: decodedPublicId });
         res.json({ success: true, message: "Image deleted successfully" });
       } else {
-        res.status(404).json({ success: false, message: "Image not found or already deleted" });
+        res.status(500).json({ success: false, message: "Failed to delete image" });
       }
     } catch (error: any) {
       console.error("Delete image error:", error);

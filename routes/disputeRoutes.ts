@@ -1,13 +1,25 @@
 import { Router } from "express";
 import { DisputeController } from "../controllers/DisputeController";
+import { protect, authorize } from "../middleware/authMiddleware";
+import { UserRole } from "../models/User";
 
 export const disputeRoutes = Router();
 
 /**
  * @swagger
+ * tags:
+ *   name: Disputes
+ *   description: Quản lý tranh chấp đơn hàng
+ */
+
+/**
+ * @swagger
  * /api/disputes:
  *   post:
- *     summary: Open a dispute
+ *     summary: Mở tranh chấp (Buyer/Seller)
+ *     description: |
+ *       Buyer hoặc Seller có thể mở tranh chấp khi có vấn đề với đơn hàng.
+ *       Evidence có thể là URL ảnh (upload trước qua POST /api/upload).
  *     tags: [Disputes]
  *     security:
  *       - bearerAuth: []
@@ -24,6 +36,8 @@ export const disputeRoutes = Router();
  *             properties:
  *               orderId:
  *                 type: string
+ *                 description: ID đơn hàng
+ *                 example: "6969db87ecf2d0f6e982f793"
  *               reason:
  *                 type: string
  *                 enum:
@@ -34,43 +48,66 @@ export const disputeRoutes = Router();
  *                   - PAYMENT_ISSUE
  *                   - INSPECTION_DISPUTE
  *                   - OTHER
+ *                 description: Lý do tranh chấp
+ *                 example: "ITEM_NOT_AS_DESCRIBED"
  *               description:
  *                 type: string
+ *                 description: Mô tả chi tiết vấn đề
+ *                 example: "Xe có vết xước lớn không được mô tả trong tin đăng"
  *               evidence:
  *                 type: array
  *                 items:
  *                   type: string
+ *                 description: Danh sách URL ảnh/video làm bằng chứng
+ *                 example: ["https://res.cloudinary.com/xxx/image1.jpg", "https://res.cloudinary.com/xxx/image2.jpg"]
  *     responses:
  *       201:
- *         description: Dispute opened
+ *         description: Dispute opened successfully
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Unauthorized
  */
-disputeRoutes.post("/", DisputeController.openDispute as any);
+disputeRoutes.post("/", protect, DisputeController.openDispute as any);
 
 /**
  * @swagger
- * /api/disputes/{disputeId}:
+ * /api/disputes/admin/all:
  *   get:
- *     summary: Get dispute details
+ *     summary: Xem tất cả tranh chấp (Admin only)
  *     tags: [Disputes]
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
- *         name: disputeId
- *         required: true
+ *       - in: query
+ *         name: status
  *         schema:
  *           type: string
+ *           enum: [OPEN, IN_REVIEW, RESOLVED, CLOSED]
+ *         description: Lọc theo trạng thái
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
  *     responses:
  *       200:
- *         description: Dispute details
+ *         description: All disputes
+ *       403:
+ *         description: Admin only
  */
-disputeRoutes.get("/:disputeId", DisputeController.getDispute as any);
+disputeRoutes.get("/admin/all", protect, authorize(UserRole.ADMIN), DisputeController.getAllDisputes as any);
 
 /**
  * @swagger
  * /api/disputes:
  *   get:
- *     summary: Get user disputes
+ *     summary: Xem tranh chấp của tôi
  *     tags: [Disputes]
  *     security:
  *       - bearerAuth: []
@@ -83,22 +120,24 @@ disputeRoutes.get("/:disputeId", DisputeController.getDispute as any);
  *       - in: query
  *         name: page
  *         schema:
- *           type: number
+ *           type: integer
+ *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
- *           type: number
+ *           type: integer
+ *           default: 20
  *     responses:
  *       200:
- *         description: Disputes list
+ *         description: User's disputes
  */
-disputeRoutes.get("/", DisputeController.getUserDisputes as any);
+disputeRoutes.get("/", protect, DisputeController.getUserDisputes as any);
 
 /**
  * @swagger
- * /api/disputes/{disputeId}/resolve:
- *   put:
- *     summary: Resolve dispute (Admin only)
+ * /api/disputes/{disputeId}:
+ *   get:
+ *     summary: Xem chi tiết tranh chấp
  *     tags: [Disputes]
  *     security:
  *       - bearerAuth: []
@@ -108,70 +147,21 @@ disputeRoutes.get("/", DisputeController.getUserDisputes as any);
  *         required: true
  *         schema:
  *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - resolution
- *             properties:
- *               resolution:
- *                 type: string
- *               compensationAmount:
- *                 type: number
+ *         description: ID tranh chấp
  *     responses:
  *       200:
- *         description: Dispute resolved
+ *         description: Dispute details
+ *       404:
+ *         description: Dispute not found
  */
-disputeRoutes.put("/:disputeId/resolve", DisputeController.resolveDispute as any);
-
-/**
- * @swagger
- * /api/disputes/{disputeId}/review:
- *   put:
- *     summary: Move dispute to review (Admin)
- *     tags: [Disputes]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: disputeId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Dispute in review
- */
-disputeRoutes.put("/:disputeId/review", DisputeController.reviewDispute as any);
-
-/**
- * @swagger
- * /api/disputes/{disputeId}/close:
- *   put:
- *     summary: Close dispute (Admin)
- *     tags: [Disputes]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: disputeId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Dispute closed
- */
-disputeRoutes.put("/:disputeId/close", DisputeController.closeDispute as any);
+disputeRoutes.get("/:disputeId", protect, DisputeController.getDispute as any);
 
 /**
  * @swagger
  * /api/disputes/{disputeId}/evidence:
  *   post:
- *     summary: Add evidence to dispute
+ *     summary: Thêm bằng chứng vào tranh chấp
+ *     description: Upload ảnh trước qua POST /api/upload, sau đó gửi URL vào đây
  *     tags: [Disputes]
  *     security:
  *       - bearerAuth: []
@@ -193,36 +183,96 @@ disputeRoutes.put("/:disputeId/close", DisputeController.closeDispute as any);
  *               evidence:
  *                 oneOf:
  *                   - type: string
+ *                     example: "https://res.cloudinary.com/xxx/evidence.jpg"
  *                   - type: array
+ *                     items:
+ *                       type: string
+ *                     example: ["https://res.cloudinary.com/xxx/img1.jpg", "https://res.cloudinary.com/xxx/img2.jpg"]
  *     responses:
  *       200:
  *         description: Evidence added
  */
-disputeRoutes.post("/:disputeId/evidence", DisputeController.addEvidence as any);
+disputeRoutes.post("/:disputeId/evidence", protect, DisputeController.addEvidence as any);
 
 /**
  * @swagger
- * /api/disputes/admin/all:
- *   get:
- *     summary: Get all disputes (Admin only)
+ * /api/disputes/{disputeId}/review:
+ *   put:
+ *     summary: Chuyển tranh chấp sang trạng thái đang xem xét (Admin)
  *     tags: [Disputes]
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: query
- *         name: status
+ *       - in: path
+ *         name: disputeId
+ *         required: true
  *         schema:
  *           type: string
- *       - in: query
- *         name: page
- *         schema:
- *           type: number
- *       - in: query
- *         name: limit
- *         schema:
- *           type: number
  *     responses:
  *       200:
- *         description: All disputes
+ *         description: Dispute in review
+ *       403:
+ *         description: Admin only
  */
-disputeRoutes.get("/admin/all", DisputeController.getAllDisputes as any);
+disputeRoutes.put("/:disputeId/review", protect, authorize(UserRole.ADMIN), DisputeController.reviewDispute as any);
+
+/**
+ * @swagger
+ * /api/disputes/{disputeId}/resolve:
+ *   put:
+ *     summary: Giải quyết tranh chấp (Admin only)
+ *     tags: [Disputes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: disputeId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - resolution
+ *             properties:
+ *               resolution:
+ *                 type: string
+ *                 description: Quyết định giải quyết
+ *                 example: "Hoàn tiền 50% cho Buyer do xe có vết xước nhỏ không được mô tả"
+ *               compensationAmount:
+ *                 type: number
+ *                 description: Số tiền bồi thường (nếu có)
+ *                 example: 5000000
+ *     responses:
+ *       200:
+ *         description: Dispute resolved
+ *       403:
+ *         description: Admin only
+ */
+disputeRoutes.put("/:disputeId/resolve", protect, authorize(UserRole.ADMIN), DisputeController.resolveDispute as any);
+
+/**
+ * @swagger
+ * /api/disputes/{disputeId}/close:
+ *   put:
+ *     summary: Đóng tranh chấp (Admin)
+ *     tags: [Disputes]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: disputeId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Dispute closed
+ *       403:
+ *         description: Admin only
+ */
+disputeRoutes.put("/:disputeId/close", protect, authorize(UserRole.ADMIN), DisputeController.closeDispute as any);
