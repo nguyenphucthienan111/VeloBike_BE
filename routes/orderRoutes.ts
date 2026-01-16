@@ -87,6 +87,30 @@ const transitionHandler = async (req: any, res: any) => {
  *     tags: [Orders]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - listingId
+ *             properties:
+ *               listingId:
+ *                 type: string
+ *                 description: ID của listing muốn mua
+ *                 example: "6968dc1e784ea62dc2355d96"
+ *               inspectionRequired:
+ *                 type: boolean
+ *                 description: Có yêu cầu kiểm tra xe không (mặc định true)
+ *                 default: true
+ *     responses:
+ *       201:
+ *         description: Order created successfully
+ *       400:
+ *         description: Bad request (listing not found, already sold, etc.)
+ *       401:
+ *         description: Unauthorized
  */
 orderRoutes.post("/", protect, validationRules.createOrder, validate, OrderController.create as any);
 
@@ -98,6 +122,36 @@ orderRoutes.post("/", protect, validationRules.createOrder, validate, OrderContr
  *     tags: [Orders]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [CREATED, ESCROW_LOCKED, IN_INSPECTION, INSPECTION_PASSED, INSPECTION_FAILED, SHIPPING, DELIVERED, COMPLETED, CANCELLED, REFUNDED]
+ *         description: Filter by order status
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *           enum: [buyer, seller]
+ *         description: Filter by role (buyer or seller)
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Items per page
+ *     responses:
+ *       200:
+ *         description: List of orders
+ *       401:
+ *         description: Unauthorized
  */
 orderRoutes.get("/", protect, OrderController.getMyOrders as any);
 
@@ -109,6 +163,20 @@ orderRoutes.get("/", protect, OrderController.getMyOrders as any);
  *     tags: [Orders]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Order ID
+ *     responses:
+ *       200:
+ *         description: Order details
+ *       404:
+ *         description: Order not found
+ *       403:
+ *         description: Not authorized to view this order
  */
 orderRoutes.get("/:id", protect, OrderController.getById as any);
 
@@ -120,6 +188,20 @@ orderRoutes.get("/:id", protect, OrderController.getById as any);
  *     tags: [Orders]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Order ID
+ *     responses:
+ *       200:
+ *         description: Order timeline with status history
+ *       404:
+ *         description: Order not found
+ *       403:
+ *         description: Not authorized
  */
 orderRoutes.get("/:id/timeline", protect, OrderController.getTimeline as any);
 
@@ -128,11 +210,124 @@ orderRoutes.get("/:id/timeline", protect, OrderController.getTimeline as any);
  * /api/orders/{id}/status:
  *   put:
  *     summary: Update order status (Seller/Buyer)
+ *     description: |
+ *       Cập nhật trạng thái đơn hàng:
+ *       - SELLER có thể chuyển sang SHIPPING (khi status = INSPECTION_PASSED)
+ *       - BUYER có thể chuyển sang DELIVERED (khi status = SHIPPING)
+ *       - BUYER/SELLER có thể CANCEL (khi status = CREATED)
+ *       - ADMIN có thể chuyển sang COMPLETED hoặc REFUNDED
  *     tags: [Orders]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Order ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [SHIPPING, DELIVERED, CANCELLED, COMPLETED, REFUNDED]
+ *                 description: Trạng thái mới
+ *               note:
+ *                 type: string
+ *                 description: Ghi chú (tùy chọn)
+ *                 example: "Đã giao hàng cho đơn vị vận chuyển"
+ *     responses:
+ *       200:
+ *         description: Status updated successfully
+ *       400:
+ *         description: Invalid status transition
+ *       403:
+ *         description: Not authorized to change status
+ *       404:
+ *         description: Order not found
  */
 orderRoutes.put("/:id/status", protect, OrderController.updateStatus as any);
+
+/**
+ * @swagger
+ * /api/orders/{id}/shipping-address:
+ *   put:
+ *     summary: Cập nhật địa chỉ giao hàng (Buyer only)
+ *     description: Buyer cập nhật địa chỉ nhận hàng trước khi thanh toán
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Order ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - shippingAddress
+ *             properties:
+ *               shippingAddress:
+ *                 type: object
+ *                 required:
+ *                   - fullName
+ *                   - phone
+ *                   - street
+ *                   - district
+ *                   - city
+ *                 properties:
+ *                   fullName:
+ *                     type: string
+ *                     description: Tên người nhận
+ *                     example: "Nguyen Van A"
+ *                   phone:
+ *                     type: string
+ *                     description: Số điện thoại
+ *                     example: "0901234567"
+ *                   street:
+ *                     type: string
+ *                     description: Địa chỉ chi tiết
+ *                     example: "123 Nguyen Hue"
+ *                   district:
+ *                     type: string
+ *                     description: Quận/Huyện
+ *                     example: "Quan 1"
+ *                   city:
+ *                     type: string
+ *                     description: Thành phố
+ *                     example: "Ho Chi Minh"
+ *                   province:
+ *                     type: string
+ *                     description: Tỉnh/Thành
+ *                     example: "Ho Chi Minh"
+ *                   zipCode:
+ *                     type: string
+ *                     description: Mã bưu điện (tùy chọn)
+ *                     example: "700000"
+ *     responses:
+ *       200:
+ *         description: Cập nhật địa chỉ thành công
+ *       400:
+ *         description: Không thể thay đổi sau khi thanh toán
+ *       403:
+ *         description: Chỉ buyer mới có thể cập nhật
+ *       404:
+ *         description: Order not found
+ */
+orderRoutes.put("/:id/shipping-address", protect, OrderController.updateShippingAddress as any);
 
 /**
  * @swagger

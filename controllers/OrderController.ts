@@ -276,6 +276,54 @@ export class OrderController {
       res.status(400).json({ success: false, message: error.message });
     }
   }
+
+  // PUT /api/orders/:id/shipping-address
+  // Update shipping address (Buyer only, before payment)
+  static async updateShippingAddress(req: any, res: any) {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.id;
+      const { shippingAddress } = req.body;
+
+      const order = await Order.findById(id);
+      if (!order) {
+        return res.status(404).json({ success: false, message: "Đơn hàng không tồn tại" });
+      }
+
+      // Only buyer can update shipping address
+      if (order.buyerId.toString() !== userId) {
+        return res.status(403).json({ success: false, message: "Chỉ người mua mới có thể cập nhật địa chỉ" });
+      }
+
+      // Can only update before payment (CREATED status)
+      if (order.status !== OrderStatus.CREATED) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Không thể thay đổi địa chỉ sau khi đã thanh toán" 
+        });
+      }
+
+      // Validate required fields
+      if (!shippingAddress || !shippingAddress.fullName || !shippingAddress.phone || 
+          !shippingAddress.street || !shippingAddress.district || !shippingAddress.city) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Vui lòng nhập đầy đủ thông tin địa chỉ (fullName, phone, street, district, city)" 
+        });
+      }
+
+      order.shippingAddress = shippingAddress;
+      await order.save();
+
+      res.json({ 
+        success: true, 
+        data: order,
+        message: "Cập nhật địa chỉ giao hàng thành công" 
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
 
 

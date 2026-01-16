@@ -18,6 +18,16 @@ export enum OrderStatus {
   CANCELLED = "CANCELLED", // Cancelled before payment/shipping
 }
 
+export interface IShippingAddress {
+  fullName: string;
+  phone: string;
+  street: string;
+  district: string;
+  city: string;
+  province: string;
+  zipCode?: string;
+}
+
 export interface IOrder extends MongooseDocument {
   listingId: Types.ObjectId;
   buyerId: Types.ObjectId;
@@ -25,6 +35,8 @@ export interface IOrder extends MongooseDocument {
   inspectorId?: Types.ObjectId;
 
   status: OrderStatus;
+
+  shippingAddress?: IShippingAddress;
 
   financials: {
     totalAmount: number;
@@ -56,6 +68,16 @@ const OrderSchema = new Schema<IOrder>(
       type: String,
       enum: Object.values(OrderStatus),
       default: OrderStatus.CREATED,
+    },
+
+    shippingAddress: {
+      fullName: String,
+      phone: String,
+      street: String,
+      district: String,
+      city: String,
+      province: String,
+      zipCode: String,
     },
 
     financials: {
