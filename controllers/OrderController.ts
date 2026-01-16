@@ -83,11 +83,18 @@ export class OrderController {
       }
 
       // Check authorization: Buyer, Seller, Inspector, or Admin can view
+      // Handle both populated and non-populated cases
+      const buyerId = (order.buyerId as any)?._id?.toString() || order.buyerId?.toString();
+      const sellerId = (order.sellerId as any)?._id?.toString() || order.sellerId?.toString();
+      const inspectorId = order.inspectorId 
+        ? ((order.inspectorId as any)?._id?.toString() || order.inspectorId?.toString())
+        : null;
+
       const isAuthorized =
         userRole === UserRole.ADMIN ||
-        order.buyerId.toString() === userId ||
-        order.sellerId.toString() === userId ||
-        (order.inspectorId && order.inspectorId.toString() === userId);
+        buyerId === userId ||
+        sellerId === userId ||
+        (inspectorId && inspectorId === userId);
 
       if (!isAuthorized) {
         return res
@@ -349,11 +356,14 @@ export class OrderEscrowController {
         return res.status(404).json({ success: false, message: "Order not found" });
       }
 
-      // Check authorization
+      // Check authorization - handle populated objects
+      const buyerId = (order.buyerId as any)?._id?.toString() || order.buyerId?.toString();
+      const sellerId = (order.sellerId as any)?._id?.toString() || order.sellerId?.toString();
+
       const isAuthorized =
         userRole === UserRole.ADMIN ||
-        order.buyerId.toString() === userId ||
-        order.sellerId.toString() === userId;
+        buyerId === userId ||
+        sellerId === userId;
 
       if (!isAuthorized) {
         return res.status(403).json({ success: false, message: "Not authorized" });
@@ -411,7 +421,7 @@ export class OrderEscrowController {
             createdAt: t.createdAt,
             paymentGatewayRef: t.paymentGatewayRef,
           })),
-          message: this.getEscrowMessage(escrowStatus, order.status),
+          message: OrderEscrowController.getEscrowMessage(escrowStatus, order.status),
         },
       });
     } catch (error: any) {
