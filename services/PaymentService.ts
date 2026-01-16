@@ -1,36 +1,22 @@
-import axios from "axios";
 import { Order, OrderStatus } from "../models/Order";
 import { User, UserRole } from "../models/User";
 import { Transaction } from "../models/Transaction";
 import crypto from "crypto";
 import { OrderService } from "./OrderService";
 
-interface PayOSPaymentLinkData {
-  orderCode: number;
-  amount: number;
-  description: string;
-  buyerName: string;
-  buyerEmail: string;
-  buyerPhone: string;
-  buyerAddress: string;
-  items: Array<{
-    name: string;
-    quantity: number;
-    price: number;
-  }>;
-  cancelUrl: string;
-  returnUrl: string;
-}
+// Import PayOS SDK
+import { PayOS } from "@payos/node";
+
+// Initialize PayOS with SDK
+const payOS = new PayOS(
+  process.env.PAYOS_CLIENT_ID || "",
+  process.env.PAYOS_API_KEY || "",
+  process.env.PAYOS_CHECKSUM_KEY || ""
+);
 
 export class PaymentService {
-  private static readonly PAYOS_API_BASE = "https://api.payos.vn/v1";
-  private static readonly PAYOS_API_KEY = process.env.PAYOS_API_KEY || "";
-  private static readonly PAYOS_CLIENT_ID = process.env.PAYOS_CLIENT_ID || "";
-  private static readonly PAYOS_CHECKSUM_KEY =
-    process.env.PAYOS_CHECKSUM_KEY || "";
-
   /**
-   * Create payment link on PayOS
+   * Create payment link using PayOS SDK
    */
   static async createPaymentLink(
     orderId: string,
@@ -45,64 +31,35 @@ export class PaymentService {
       if (!order) throw new Error("Order not found");
 
       const buyer = order.buyerId as any;
-      const orderCode = Math.floor(Math.random() * 1000000);
+      const orderCode = Number(String(Date.now()).slice(-6));
 
-      const paymentData: PayOSPaymentLinkData = {
+      const paymentData = {
         orderCode,
         amount: order.financials.totalAmount,
-        description: `VeloBike Order #${orderId}`,
-        buyerName: buyer.fullName,
-        buyerEmail: buyer.email,
+        description: `VeloBike #${orderCode}`,
+        buyerName: buyer.fullName || "Buyer",
+        buyerEmail: buyer.email || "",
         buyerPhone: buyer.phone || "",
-        buyerAddress: `${buyer.address?.street || ""}, ${
-          buyer.address?.city || ""
-        }`,
+        buyerAddress: buyer.address?.street || "",
         items: [
           {
             name: "Bike Purchase",
             quantity: 1,
             price: order.financials.itemPrice,
           },
-          ...(order.financials.inspectionFee > 0
-            ? [
-                {
-                  name: "Inspection Fee",
-                  quantity: 1,
-                  price: order.financials.inspectionFee,
-                },
-              ]
-            : []),
-          {
-            name: "Shipping",
-            quantity: 1,
-            price: order.financials.shippingFee,
-          },
         ],
-        cancelUrl,
         returnUrl,
+        cancelUrl,
       };
 
-      // Sign payload
-      const signature = this.createSignature(paymentData);
+      // Use PayOS SDK - paymentRequests.create()
+      const paymentLinkResponse = await payOS.paymentRequests.create(paymentData);
 
-      const response = await axios.post(
-        `${this.PAYOS_API_BASE}/payment-links`,
-        paymentData,
-        {
-          headers: {
-            "x-client-id": this.PAYOS_CLIENT_ID,
-            "x-api-key": this.PAYOS_API_KEY,
-            "x-signature": signature,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (!response.data?.data?.checkoutUrl) {
+      if (!paymentLinkResponse?.checkoutUrl) {
         throw new Error("Failed to create payment link");
       }
 
-      // Persist trace to order timeline for webhook lookup
+      // Save orderCode to timeline for webhook lookup
       order.timeline.push({
         status: order.status,
         timestamp: new Date(),
@@ -111,12 +68,12 @@ export class PaymentService {
       } as any);
       await order.save();
 
-      return { paymentLink: response.data.data.checkoutUrl, orderCode };
+      return { 
+        paymentLink: paymentLinkResponse.checkoutUrl, 
+        orderCode 
+      };
     } catch (err: any) {
-      console.error(
-        "PayOS create link error:",
-        err.response?.data || err.message
-      );
+      console.error("PayOS create link error:", err.message);
       throw new Error(`Payment link creation failed: ${err.message}`);
     }
   }
@@ -126,9 +83,10 @@ export class PaymentService {
    */
   static verifyWebhookSignature(body: any, signature: string): boolean {
     try {
+      const checksumKey = process.env.PAYOS_CHECKSUM_KEY || "";
       const dataToVerify = JSON.stringify(body);
       const computedSignature = crypto
-        .createHmac("sha256", this.PAYOS_CHECKSUM_KEY)
+        .createHmac("sha256", checksumKey)
         .update(dataToVerify)
         .digest("hex");
 
@@ -205,20 +163,12 @@ export class PaymentService {
   }
 
   /**
-   * Get payment info from PayOS
+   * Get payment info from PayOS using SDK
    */
   static async getPaymentInfo(orderCode: number): Promise<any> {
     try {
-      const response = await axios.get(
-        `${this.PAYOS_API_BASE}/payment-links/${orderCode}`,
-        {
-          headers: {
-            "x-client-id": this.PAYOS_CLIENT_ID,
-            "x-api-key": this.PAYOS_API_KEY,
-          },
-        }
-      );
-      return response.data?.data;
+      const paymentInfo = await payOS.paymentRequests.get(orderCode);
+      return paymentInfo;
     } catch (err: any) {
       console.error("Get payment info error:", err.message);
       throw err;
@@ -226,7 +176,33 @@ export class PaymentService {
   }
 
   /**
+   * Cancel payment link using SDK
+   */
+  static async cancelPaymentLink(orderCode: number, reason?: string): Promise<any> {
+    try {
+      const result = await payOS.paymentRequests.cancel(orderCode, reason);
+      return result;
+    } catch (err: any) {
+      console.error("Cancel payment link error:", err.message);
+      throw err;
+    }
+  }
+
+  /**
+   * Verify webhook data using SDK
+   */
+  static verifyPaymentWebhookData(webhookBody: any): any {
+    try {
+      return payOS.webhooks.verifyData(webhookBody);
+    } catch (err: any) {
+      console.error("Verify webhook error:", err.message);
+      return null;
+    }
+  }
+
+  /**
    * Release payment to seller (split payout)
+   * Note: PayOS doesn't support split payout directly, so we track in our system
    */
   static async releasePayment(
     orderId: string,
@@ -243,29 +219,6 @@ export class PaymentService {
       const sellerAmount =
         order.financials.itemPrice - order.financials.platformFee;
       const platformAmount = order.financials.platformFee;
-
-      // Attempt PayOS split payout (simulated if not available)
-      try {
-        const payload = {
-          orderId,
-          sellerId,
-          amounts: { seller: sellerAmount, platform: platformAmount },
-        };
-        const sig = this.createSignature(payload);
-        await axios.post(`${this.PAYOS_API_BASE}/payouts/split`, payload, {
-          headers: {
-            "x-client-id": this.PAYOS_CLIENT_ID,
-            "x-api-key": this.PAYOS_API_KEY,
-            "x-signature": sig,
-            "Content-Type": "application/json",
-          },
-        });
-      } catch (err) {
-        console.warn(
-          "PayOS split payout failed or simulated:",
-          (err as any).message
-        );
-      }
 
       // Create PAYMENT_RELEASE transaction for seller
       await Transaction.create({
@@ -288,7 +241,7 @@ export class PaymentService {
 
       // Create PLATFORM_FEE transaction
       await Transaction.create({
-        userId: sellerId, // Track against seller for reference
+        userId: sellerId,
         type: "PLATFORM_FEE",
         amount: platformAmount,
         status: "COMPLETED",
@@ -296,7 +249,7 @@ export class PaymentService {
         description: `Platform fee for order #${order._id}`,
       });
 
-      // Update seller wallet as fallback
+      // Update seller wallet
       seller.wallet.balance += sellerAmount;
       await seller.save();
 
@@ -311,7 +264,6 @@ export class PaymentService {
 
   /**
    * Refund payment to buyer
-   * Creates refund transaction and attempts PayOS refund if available
    */
   static async refundPayment(orderId: string): Promise<void> {
     try {
@@ -321,39 +273,23 @@ export class PaymentService {
       const buyer = await User.findById(order.buyerId);
       if (!buyer) throw new Error("Buyer not found");
 
-      // Find the original PAYMENT_HOLD transaction to get PayOS reference
+      // Find the original PAYMENT_HOLD transaction
       const holdTransaction = await Transaction.findOne({
         relatedOrderId: order._id,
         type: "PAYMENT_HOLD",
         status: "COMPLETED",
       });
 
-      // Attempt PayOS refund if we have the transaction reference
-      let payosRefundSuccess = false;
-      if (holdTransaction?.paymentGatewayRef) {
+      // Try to cancel payment link on PayOS (if not yet paid out)
+      if (holdTransaction?.metadata?.orderCode) {
         try {
-          const payload = {
-            orderId,
-            transactionId: holdTransaction.paymentGatewayRef,
-            amount: order.financials.totalAmount,
-            reason: "Order refunded",
-          };
-          const sig = this.createSignature(payload);
-          await axios.post(`${this.PAYOS_API_BASE}/refunds`, payload, {
-            headers: {
-              "x-client-id": this.PAYOS_CLIENT_ID,
-              "x-api-key": this.PAYOS_API_KEY,
-              "x-signature": sig,
-              "Content-Type": "application/json",
-            },
-          });
-          payosRefundSuccess = true;
-          console.log(`PayOS refund successful for order ${orderId}`);
-        } catch (err) {
-          console.warn(
-            "PayOS refund failed, falling back to wallet credit:",
-            (err as any).message
+          await payOS.paymentRequests.cancel(
+            holdTransaction.metadata.orderCode,
+            "Order refunded"
           );
+          console.log(`PayOS payment link cancelled for order ${orderId}`);
+        } catch (err) {
+          console.warn("PayOS cancel failed:", (err as any).message);
         }
       }
 
@@ -369,7 +305,7 @@ export class PaymentService {
         metadata: {
           escrowStatus: "REFUNDED",
           refundedAt: new Date(),
-          refundMethod: payosRefundSuccess ? "PAYOS_DIRECT" : "WALLET_CREDIT",
+          refundMethod: "WALLET_CREDIT",
           originalPaymentRef: holdTransaction?.paymentGatewayRef,
         },
       });
@@ -384,14 +320,12 @@ export class PaymentService {
         await holdTransaction.save();
       }
 
-      // Credit buyer wallet (fallback or additional credit)
-      if (!payosRefundSuccess) {
-        buyer.wallet.balance += order.financials.totalAmount;
-        await buyer.save();
-      }
+      // Credit buyer wallet
+      buyer.wallet.balance += order.financials.totalAmount;
+      await buyer.save();
 
       console.log(
-        `Refund processed for order ${orderId}: ${order.financials.totalAmount} VND (method: ${payosRefundSuccess ? "PayOS" : "Wallet"})`
+        `Refund processed for order ${orderId}: ${order.financials.totalAmount} VND`
       );
     } catch (err: any) {
       console.error("Refund error:", err.message);
@@ -452,26 +386,9 @@ export class PaymentService {
       }).limit(1);
 
       return inspectors.length > 0 ? inspectors[0] : null;
-
-      // TODO: In production, implement geolocation matching:
-      // 1. Get order location from listing
-      // 2. Find inspectors within radius using 2dsphere index
-      // 3. Filter by availability (not currently inspecting too many orders)
-      // 4. Return nearest available inspector
     } catch (error) {
       console.error("Error finding inspector:", error);
       return null;
     }
-  }
-
-  /**
-   * Create signature for PayOS requests
-   */
-  private static createSignature(data: any): string {
-    const dataToSign = JSON.stringify(data);
-    return crypto
-      .createHmac("sha256", this.PAYOS_CHECKSUM_KEY)
-      .update(dataToSign)
-      .digest("hex");
   }
 }

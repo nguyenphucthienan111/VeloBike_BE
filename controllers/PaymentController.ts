@@ -123,4 +123,91 @@ export class PaymentController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  // POST /api/payment/simulate-payment
+  // [DEV ONLY] Simulate payment for testing without PayOS
+  static async simulatePayment(req: any, res: any) {
+    try {
+      // Only allow in development
+      if (process.env.NODE_ENV === "production") {
+        return res.status(403).json({ 
+          success: false, 
+          message: "Simulate payment không khả dụng trong production" 
+        });
+      }
+
+      const { orderId } = req.body;
+      const userId = req.user?.id;
+
+      if (!orderId) {
+        return res.status(400).json({ success: false, message: "orderId is required" });
+      }
+
+      const order = await Order.findById(orderId);
+      if (!order) {
+        return res.status(404).json({ success: false, message: "Order not found" });
+      }
+
+      if (order.status !== OrderStatus.CREATED) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `Order đang ở trạng thái ${order.status}, không thể thanh toán` 
+        });
+      }
+
+      // Check if user is the buyer
+      if (order.buyerId.toString() !== userId) {
+        return res.status(403).json({ 
+          success: false, 
+          message: "Chỉ buyer của order này mới có thể thanh toán" 
+        });
+      }
+
+      // Import Transaction model
+      const { Transaction } = await import("../models/Transaction");
+
+      // Create PAYMENT_HOLD transaction (simulate escrow)
+      await Transaction.create({
+        userId: order.buyerId,
+        type: "PAYMENT_HOLD",
+        amount: order.financials.totalAmount,
+        status: "COMPLETED",
+        relatedOrderId: order._id,
+        description: `[SIMULATED] Escrow locked for order #${order._id}`,
+        paymentGatewayRef: `sim_${Date.now()}`,
+        metadata: {
+          simulated: true,
+          escrowStatus: "LOCKED",
+          lockedAt: new Date(),
+        },
+      });
+
+      // Update order status to ESCROW_LOCKED
+      await OrderService.lockEscrow(orderId, `sim_tx_${Date.now()}`);
+
+      // Add timeline entry
+      order.status = OrderStatus.ESCROW_LOCKED;
+      order.timeline.push({
+        status: OrderStatus.ESCROW_LOCKED,
+        timestamp: new Date(),
+        actorId: order.buyerId,
+        note: "[SIMULATED] Payment confirmed - Escrow locked",
+      } as any);
+      await order.save();
+
+      res.json({
+        success: true,
+        message: "Thanh toán đã được simulate thành công",
+        data: {
+          orderId: order._id,
+          status: order.status,
+          escrowStatus: "LOCKED",
+          amount: order.financials.totalAmount,
+          note: "Đây là thanh toán giả lập cho môi trường dev. Trong production, dùng PayOS thật."
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
