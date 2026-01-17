@@ -45,6 +45,48 @@ export class OrderController {
           .json({ success: false, message: "Cannot buy your own listing" });
       }
 
+      // Check if there's already an active order for this listing
+      const existingOrder = await Order.findOne({
+        listingId,
+        status: {
+          $nin: [
+            OrderStatus.COMPLETED,
+            OrderStatus.CANCELLED,
+            OrderStatus.REFUNDED,
+          ],
+        },
+      });
+
+      if (existingOrder) {
+        // If order is CREATED and older than 15 minutes, auto-cancel it
+        const ORDER_TIMEOUT_MINUTES = 15;
+        const orderAge = Date.now() - existingOrder.createdAt.getTime();
+        const timeoutMs = ORDER_TIMEOUT_MINUTES * 60 * 1000;
+
+        if (
+          existingOrder.status === OrderStatus.CREATED &&
+          orderAge > timeoutMs
+        ) {
+          // Auto-cancel expired order
+          existingOrder.status = OrderStatus.CANCELLED;
+          existingOrder.timeline.push({
+            status: OrderStatus.CANCELLED,
+            timestamp: new Date(),
+            actorId: existingOrder.buyerId,
+            note: "Tự động hủy do không thanh toán trong 15 phút",
+          } as any);
+          await existingOrder.save();
+          
+          console.log(`Auto-cancelled expired order ${existingOrder._id}`);
+        } else {
+          // Order is still active
+          return res.status(400).json({
+            success: false,
+            message: "Listing đã có người đặt mua. Vui lòng chọn xe khác.",
+          });
+        }
+      }
+
       // Create order using OrderService
       const order = await OrderService.createOrder(
         listingId,
