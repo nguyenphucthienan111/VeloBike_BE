@@ -50,8 +50,55 @@ class OrderController {
                         .status(400)
                         .json({ success: false, message: "Cannot buy your own listing" });
                 }
+                // Validate inspection requirement
+                // If listing doesn't require inspection, buyer cannot request it
+                if (!listing.inspectionRequired && inspectionRequired) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Seller không yêu cầu kiểm định cho xe này. Bạn không thể chọn kiểm định.",
+                    });
+                }
+                // Final inspection decision: listing requires AND buyer agrees
+                const finalInspectionRequired = listing.inspectionRequired && inspectionRequired;
+                // Check if there's already an active order for this listing
+                const existingOrder = yield Order_1.Order.findOne({
+                    listingId,
+                    status: {
+                        $nin: [
+                            Order_1.OrderStatus.COMPLETED,
+                            Order_1.OrderStatus.CANCELLED,
+                            Order_1.OrderStatus.REFUNDED,
+                        ],
+                    },
+                });
+                if (existingOrder) {
+                    // If order is CREATED and older than 15 minutes, auto-cancel it
+                    const ORDER_TIMEOUT_MINUTES = 15;
+                    const orderAge = Date.now() - existingOrder.createdAt.getTime();
+                    const timeoutMs = ORDER_TIMEOUT_MINUTES * 60 * 1000;
+                    if (existingOrder.status === Order_1.OrderStatus.CREATED &&
+                        orderAge > timeoutMs) {
+                        // Auto-cancel expired order
+                        existingOrder.status = Order_1.OrderStatus.CANCELLED;
+                        existingOrder.timeline.push({
+                            status: Order_1.OrderStatus.CANCELLED,
+                            timestamp: new Date(),
+                            actorId: existingOrder.buyerId,
+                            note: "Tự động hủy do không thanh toán trong 15 phút",
+                        });
+                        yield existingOrder.save();
+                        console.log(`Auto-cancelled expired order ${existingOrder._id}`);
+                    }
+                    else {
+                        // Order is still active
+                        return res.status(400).json({
+                            success: false,
+                            message: "Listing đã có người đặt mua. Vui lòng chọn xe khác.",
+                        });
+                    }
+                }
                 // Create order using OrderService
-                const order = yield OrderService_1.OrderService.createOrder(listingId, buyerId, inspectionRequired);
+                const order = yield OrderService_1.OrderService.createOrder(listingId, buyerId, finalInspectionRequired);
                 res.status(201).json({
                     success: true,
                     data: order,
@@ -67,7 +114,7 @@ class OrderController {
     // Get order details
     static getById(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b;
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
             try {
                 const { id } = req.params;
                 const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
@@ -83,10 +130,16 @@ class OrderController {
                         .json({ success: false, message: "Order not found" });
                 }
                 // Check authorization: Buyer, Seller, Inspector, or Admin can view
+                // Handle both populated and non-populated cases
+                const buyerId = ((_d = (_c = order.buyerId) === null || _c === void 0 ? void 0 : _c._id) === null || _d === void 0 ? void 0 : _d.toString()) || ((_e = order.buyerId) === null || _e === void 0 ? void 0 : _e.toString());
+                const sellerId = ((_g = (_f = order.sellerId) === null || _f === void 0 ? void 0 : _f._id) === null || _g === void 0 ? void 0 : _g.toString()) || ((_h = order.sellerId) === null || _h === void 0 ? void 0 : _h.toString());
+                const inspectorId = order.inspectorId
+                    ? (((_k = (_j = order.inspectorId) === null || _j === void 0 ? void 0 : _j._id) === null || _k === void 0 ? void 0 : _k.toString()) || ((_l = order.inspectorId) === null || _l === void 0 ? void 0 : _l.toString()))
+                    : null;
                 const isAuthorized = userRole === User_1.UserRole.ADMIN ||
-                    order.buyerId.toString() === userId ||
-                    order.sellerId.toString() === userId ||
-                    (order.inspectorId && order.inspectorId.toString() === userId);
+                    buyerId === userId ||
+                    sellerId === userId ||
+                    (inspectorId && inspectorId === userId);
                 if (!isAuthorized) {
                     return res
                         .status(403)
@@ -251,6 +304,51 @@ class OrderController {
             }
         });
     }
+    // PUT /api/orders/:id/shipping-address
+    // Update shipping address (Buyer only, before payment)
+    static updateShippingAddress(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            try {
+                const { id } = req.params;
+                const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                const { shippingAddress } = req.body;
+                const order = yield Order_1.Order.findById(id);
+                if (!order) {
+                    return res.status(404).json({ success: false, message: "Đơn hàng không tồn tại" });
+                }
+                // Only buyer can update shipping address
+                if (order.buyerId.toString() !== userId) {
+                    return res.status(403).json({ success: false, message: "Chỉ người mua mới có thể cập nhật địa chỉ" });
+                }
+                // Can only update before payment (CREATED status)
+                if (order.status !== Order_1.OrderStatus.CREATED) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Không thể thay đổi địa chỉ sau khi đã thanh toán"
+                    });
+                }
+                // Validate required fields
+                if (!shippingAddress || !shippingAddress.fullName || !shippingAddress.phone ||
+                    !shippingAddress.street || !shippingAddress.district || !shippingAddress.city) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Vui lòng nhập đầy đủ thông tin địa chỉ (fullName, phone, street, district, city)"
+                    });
+                }
+                order.shippingAddress = shippingAddress;
+                yield order.save();
+                res.json({
+                    success: true,
+                    data: order,
+                    message: "Cập nhật địa chỉ giao hàng thành công"
+                });
+            }
+            catch (error) {
+                res.status(500).json({ success: false, message: error.message });
+            }
+        });
+    }
 }
 exports.OrderController = OrderController;
 // Import Transaction model for escrow status
@@ -262,7 +360,7 @@ class OrderEscrowController {
      */
     static getEscrowStatus(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b;
+            var _a, _b, _c, _d, _e, _f, _g, _h;
             try {
                 const { id } = req.params;
                 const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
@@ -273,10 +371,12 @@ class OrderEscrowController {
                 if (!order) {
                     return res.status(404).json({ success: false, message: "Order not found" });
                 }
-                // Check authorization
+                // Check authorization - handle populated objects
+                const buyerId = ((_d = (_c = order.buyerId) === null || _c === void 0 ? void 0 : _c._id) === null || _d === void 0 ? void 0 : _d.toString()) || ((_e = order.buyerId) === null || _e === void 0 ? void 0 : _e.toString());
+                const sellerId = ((_g = (_f = order.sellerId) === null || _f === void 0 ? void 0 : _f._id) === null || _g === void 0 ? void 0 : _g.toString()) || ((_h = order.sellerId) === null || _h === void 0 ? void 0 : _h.toString());
                 const isAuthorized = userRole === User_1.UserRole.ADMIN ||
-                    order.buyerId.toString() === userId ||
-                    order.sellerId.toString() === userId;
+                    buyerId === userId ||
+                    sellerId === userId;
                 if (!isAuthorized) {
                     return res.status(403).json({ success: false, message: "Not authorized" });
                 }
@@ -330,7 +430,7 @@ class OrderEscrowController {
                             createdAt: t.createdAt,
                             paymentGatewayRef: t.paymentGatewayRef,
                         })),
-                        message: this.getEscrowMessage(escrowStatus, order.status),
+                        message: OrderEscrowController.getEscrowMessage(escrowStatus, order.status),
                     },
                 });
             }

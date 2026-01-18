@@ -1,10 +1,15 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authRoutes = void 0;
 const express_1 = require("express");
+const multer_1 = __importDefault(require("multer"));
 const AuthController_1 = require("../controllers/AuthController");
 const validationMiddleware_1 = require("../middleware/validationMiddleware");
 const authMiddleware_1 = require("../middleware/authMiddleware");
+const upload = (0, multer_1.default)({ dest: "uploads/" });
 exports.authRoutes = (0, express_1.Router)();
 /**
  * @swagger
@@ -258,7 +263,7 @@ exports.authRoutes.post("/reset-password", AuthController_1.AuthController.reset
  * @swagger
  * /api/auth/kyc-submit:
  *   post:
- *     summary: Submit KYC documents (Seller only)
+ *     summary: Submit KYC documents (Seller only) - JSON with URLs
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
@@ -288,6 +293,49 @@ exports.authRoutes.post("/reset-password", AuthController_1.AuthController.reset
  *         description: KYC submitted
  */
 exports.authRoutes.post("/kyc-submit", authMiddleware_1.protect, AuthController_1.AuthController.submitKyc);
+/**
+ * @swagger
+ * /api/auth/kyc-upload:
+ *   post:
+ *     summary: Submit KYC with file upload (Seller only)
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - documentType
+ *               - documentId
+ *               - frontImage
+ *               - backImage
+ *             properties:
+ *               documentType:
+ *                 type: string
+ *                 enum: [CCCD, CMND, PASSPORT]
+ *                 description: Loại giấy tờ
+ *               documentId:
+ *                 type: string
+ *                 description: Số CCCD/CMND/Passport
+ *               frontImage:
+ *                 type: string
+ *                 format: binary
+ *                 description: Ảnh mặt trước
+ *               backImage:
+ *                 type: string
+ *                 format: binary
+ *                 description: Ảnh mặt sau
+ *     responses:
+ *       200:
+ *         description: KYC submitted successfully
+ */
+exports.authRoutes.post("/kyc-upload", authMiddleware_1.protect, upload.fields([
+    { name: "frontImage", maxCount: 1 },
+    { name: "backImage", maxCount: 1 }
+]), AuthController_1.AuthController.submitKycWithUpload);
 /**
  * @swagger
  * /api/auth/refresh-token:

@@ -8,11 +8,14 @@ import { OrderService } from "./OrderService";
 import { PayOS } from "@payos/node";
 
 // Initialize PayOS with SDK
-const payOS = new PayOS(
-  process.env.PAYOS_CLIENT_ID || "",
-  process.env.PAYOS_API_KEY || "",
-  process.env.PAYOS_CHECKSUM_KEY || ""
-);
+const payOS = new PayOS({
+  clientId: process.env.PAYOS_CLIENT_ID || "",
+  apiKey: process.env.PAYOS_API_KEY || "",
+  checksumKey: process.env.PAYOS_CHECKSUM_KEY || ""
+});
+
+// Payment link expiration time (in minutes)
+const PAYMENT_LINK_EXPIRATION_MINUTES = 30;
 
 export class PaymentService {
   /**
@@ -33,6 +36,9 @@ export class PaymentService {
       const buyer = order.buyerId as any;
       const orderCode = Number(String(Date.now()).slice(-6));
 
+      // Set expiration time (default: 30 minutes from now)
+      const expiredAt = Math.floor(Date.now() / 1000) + (PAYMENT_LINK_EXPIRATION_MINUTES * 60);
+
       const paymentData = {
         orderCode,
         amount: order.financials.totalAmount,
@@ -48,6 +54,7 @@ export class PaymentService {
             price: order.financials.itemPrice,
           },
         ],
+        expiredAt, // Payment link expires after configured minutes
         returnUrl,
         cancelUrl,
       };
@@ -193,7 +200,8 @@ export class PaymentService {
    */
   static verifyPaymentWebhookData(webhookBody: any): any {
     try {
-      return payOS.webhooks.verifyData(webhookBody);
+      // PayOS SDK doesn't have verifyData method, use manual verification
+      return this.verifyWebhookSignature(webhookBody, webhookBody.signature || "");
     } catch (err: any) {
       console.error("Verify webhook error:", err.message);
       return null;
@@ -281,10 +289,10 @@ export class PaymentService {
       });
 
       // Try to cancel payment link on PayOS (if not yet paid out)
-      if (holdTransaction?.metadata?.orderCode) {
+      if (holdTransaction?.metadata && (holdTransaction.metadata as any).orderCode) {
         try {
           await payOS.paymentRequests.cancel(
-            holdTransaction.metadata.orderCode,
+            (holdTransaction.metadata as any).orderCode,
             "Order refunded"
           );
           console.log(`PayOS payment link cancelled for order ${orderId}`);

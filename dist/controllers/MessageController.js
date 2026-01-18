@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MessageController = void 0;
 const Message_1 = require("../models/Message");
 const Conversation_1 = require("../models/Conversation");
+const User_1 = require("../models/User");
 const mongoose_1 = __importDefault(require("mongoose"));
 class MessageController {
     /**
@@ -23,10 +24,14 @@ class MessageController {
      */
     static getOrCreateConversation(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { userId } = req.params;
-                const currentUserId = req.userId;
+                const currentUserId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
                 const { listingId, orderId } = req.query;
+                if (!currentUserId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
                 const conversation = yield Conversation_1.Conversation.findOne({
                     $or: [
                         { buyerId: currentUserId, sellerId: userId },
@@ -39,10 +44,27 @@ class MessageController {
                         data: conversation,
                     });
                 }
+                // Determine buyer/seller based on user roles
+                const currentUser = yield User_1.User.findById(currentUserId);
+                const otherUser = yield User_1.User.findById(userId);
+                let buyerId, sellerId;
+                if ((currentUser === null || currentUser === void 0 ? void 0 : currentUser.role) === "BUYER") {
+                    buyerId = currentUserId;
+                    sellerId = userId;
+                }
+                else if ((currentUser === null || currentUser === void 0 ? void 0 : currentUser.role) === "SELLER") {
+                    buyerId = userId;
+                    sellerId = currentUserId;
+                }
+                else {
+                    // Default: current user is buyer
+                    buyerId = currentUserId;
+                    sellerId = userId;
+                }
                 // Create new conversation
                 const newConversation = new Conversation_1.Conversation({
-                    buyerId: currentUserId,
-                    sellerId: userId,
+                    buyerId,
+                    sellerId,
                     listingId: listingId || undefined,
                     orderId: orderId || undefined,
                 });
@@ -70,9 +92,13 @@ class MessageController {
      */
     static sendMessage(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { conversationId, receiverId, content, attachments } = req.body;
-                const senderId = req.userId;
+                const senderId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                if (!senderId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
                 // Verify conversation exists
                 const conversation = yield Conversation_1.Conversation.findById(conversationId);
                 if (!conversation) {
@@ -120,13 +146,15 @@ class MessageController {
     }
     /**
      * Get messages in conversation
-     * GET /api/messages/conversation/:conversationId
+     * GET /api/messages/list/:conversationId
      */
     static getMessages(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { conversationId } = req.params;
                 const { page = 1, limit = 50 } = req.query;
+                const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
                 const messages = yield Message_1.Message.find({ conversationId })
                     .populate("senderId", "fullName avatar")
                     .sort({ createdAt: -1 })
@@ -134,14 +162,16 @@ class MessageController {
                     .limit(Number(limit));
                 const total = yield Message_1.Message.countDocuments({ conversationId });
                 // Mark messages as read
-                yield Message_1.Message.updateMany({
-                    conversationId,
-                    receiverId: req.userId,
-                    isRead: false,
-                }, {
-                    isRead: true,
-                    readAt: new Date(),
-                });
+                if (userId) {
+                    yield Message_1.Message.updateMany({
+                        conversationId,
+                        receiverId: userId,
+                        isRead: false,
+                    }, {
+                        isRead: true,
+                        readAt: new Date(),
+                    });
+                }
                 res.status(200).json({
                     success: true,
                     data: messages.reverse(),
@@ -170,9 +200,13 @@ class MessageController {
      */
     static getUserConversations(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
-                const userId = req.userId;
+                const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
                 const { page = 1, limit = 20 } = req.query;
+                if (!userId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
                 const conversations = yield Conversation_1.Conversation.find({
                     $or: [{ buyerId: userId }, { sellerId: userId }],
                     isActive: true,
@@ -215,8 +249,12 @@ class MessageController {
      */
     static getUnreadCount(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
-                const userId = req.userId;
+                const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                if (!userId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
                 const count = yield Message_1.Message.countDocuments({
                     receiverId: userId,
                     isRead: false,
@@ -271,9 +309,13 @@ class MessageController {
      */
     static deleteMessage(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { messageId } = req.params;
-                const userId = req.userId;
+                const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                if (!userId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
                 const message = yield Message_1.Message.findById(messageId);
                 if (!message) {
                     return res

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.wishlistRoutes = void 0;
 const express_1 = require("express");
 const WishlistController_1 = require("../controllers/WishlistController");
+const authMiddleware_1 = require("../middleware/authMiddleware");
 exports.wishlistRoutes = (0, express_1.Router)();
 /**
  * @swagger
@@ -27,7 +28,7 @@ exports.wishlistRoutes = (0, express_1.Router)();
  *       201:
  *         description: Added to wishlist
  */
-exports.wishlistRoutes.post("/", WishlistController_1.WishlistController.addToWishlist);
+exports.wishlistRoutes.post("/", authMiddleware_1.protect, WishlistController_1.WishlistController.addToWishlist);
 /**
  * @swagger
  * /api/wishlist:
@@ -54,7 +55,7 @@ exports.wishlistRoutes.post("/", WishlistController_1.WishlistController.addToWi
  *       200:
  *         description: Wishlist items
  */
-exports.wishlistRoutes.get("/", WishlistController_1.WishlistController.getWishlist);
+exports.wishlistRoutes.get("/", authMiddleware_1.protect, WishlistController_1.WishlistController.getWishlist);
 /**
  * @swagger
  * /api/wishlist/check/{listingId}:
@@ -73,7 +74,7 @@ exports.wishlistRoutes.get("/", WishlistController_1.WishlistController.getWishl
  *       200:
  *         description: Check result
  */
-exports.wishlistRoutes.get("/check/:listingId", WishlistController_1.WishlistController.checkWishlist);
+exports.wishlistRoutes.get("/check/:listingId", authMiddleware_1.protect, WishlistController_1.WishlistController.checkWishlist);
 /**
  * @swagger
  * /api/wishlist/count:
@@ -86,7 +87,20 @@ exports.wishlistRoutes.get("/check/:listingId", WishlistController_1.WishlistCon
  *       200:
  *         description: Wishlist count
  */
-exports.wishlistRoutes.get("/count", WishlistController_1.WishlistController.getWishlistCount);
+exports.wishlistRoutes.get("/count", authMiddleware_1.protect, WishlistController_1.WishlistController.getWishlistCount);
+/**
+ * @swagger
+ * /api/wishlist/clear:
+ *   delete:
+ *     summary: Clear all wishlist items
+ *     tags: [Wishlist]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Wishlist cleared
+ */
+exports.wishlistRoutes.delete("/clear", authMiddleware_1.protect, WishlistController_1.WishlistController.clearWishlist);
 /**
  * @swagger
  * /api/wishlist/{listingId}:
@@ -105,18 +119,5 @@ exports.wishlistRoutes.get("/count", WishlistController_1.WishlistController.get
  *       200:
  *         description: Removed from wishlist
  */
-exports.wishlistRoutes.delete("/:listingId", WishlistController_1.WishlistController.removeFromWishlist);
-/**
- * @swagger
- * /api/wishlist/clear:
- *   delete:
- *     summary: Clear all wishlist items
- *     tags: [Wishlist]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Wishlist cleared
- */
-exports.wishlistRoutes.delete("/clear", WishlistController_1.WishlistController.clearWishlist);
+exports.wishlistRoutes.delete("/:listingId", authMiddleware_1.protect, WishlistController_1.WishlistController.removeFromWishlist);
 //# sourceMappingURL=wishlistRoutes.js.map

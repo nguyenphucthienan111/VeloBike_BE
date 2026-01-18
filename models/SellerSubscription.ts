@@ -30,6 +30,13 @@ export interface ISellerSubscription extends Document {
     paymentMethod: string;
   }>;
   
+  // Pending payment (for webhook lookup)
+  pendingPayment?: {
+    orderCode: number;
+    planType: PlanType;
+    createdAt: Date;
+  };
+  
   createdAt: Date;
   updatedAt: Date;
 }
@@ -91,6 +98,16 @@ const SellerSubscriptionSchema: Schema = new Schema(
       transactionId: { type: String },
       paymentMethod: { type: String, default: "PAYOS" },
     }],
+    
+    // Pending payment (for webhook lookup)
+    pendingPayment: {
+      orderCode: { type: Number },
+      planType: { 
+        type: String, 
+        enum: Object.values(PlanType) 
+      },
+      createdAt: { type: Date },
+    },
   },
   { timestamps: true }
 );

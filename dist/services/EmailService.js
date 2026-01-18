@@ -24,23 +24,113 @@ class EmailService {
                 const mailOptions = {
                     from: `"VeloBike" <${process.env.SMTP_USER}>`,
                     to: email,
-                    subject: "Verify Your Email - VeloBike",
+                    subject: "🚴 Xác thực email của bạn - VeloBike",
                     html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">Welcome to VeloBike!</h2>
-            <p>Hi ${name},</p>
-            <p>Thank you for registering with VeloBike. Please verify your email address using the code below:</p>
-            <div style="background: #f3f4f6; padding: 20px; text-align: center; margin: 20px 0;">
-              <h1 style="color: #1f2937; font-size: 32px; margin: 0;">${code}</h1>
-            </div>
-            <p>This code will expire in 10 minutes.</p>
-            <p>If you didn't create an account with VeloBike, please ignore this email.</p>
-            <hr style="margin: 30px 0;">
-            <p style="color: #6b7280; font-size: 14px;">
-              Best regards,<br>
-              The VeloBike Team
-            </p>
-          </div>
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body style="margin: 0; padding: 0; background-color: #f0f4f8; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f0f4f8; padding: 40px 20px;">
+              <tr>
+                <td align="center">
+                  <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);">
+                    
+                    <!-- Header with gradient -->
+                    <tr>
+                      <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 40px 50px 40px; text-align: center;">
+                        <div style="display: inline-block; background: rgba(255,255,255,0.2); border-radius: 50%; padding: 16px; margin-bottom: 16px;">
+                          <span style="font-size: 40px;">🚴</span>
+                        </div>
+                        <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">VeloBike</h1>
+                        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">Sàn giao dịch xe đạp thể thao</p>
+                      </td>
+                    </tr>
+                    
+                    <!-- Main content -->
+                    <tr>
+                      <td style="padding: 40px;">
+                        <h2 style="color: #1a202c; margin: 0 0 8px 0; font-size: 22px; font-weight: 600;">Xin chào ${name}! 👋</h2>
+                        <p style="color: #64748b; margin: 0 0 24px 0; font-size: 15px; line-height: 1.6;">
+                          Cảm ơn bạn đã đăng ký tài khoản VeloBike. Để hoàn tất đăng ký, vui lòng nhập mã xác thực bên dưới:
+                        </p>
+                        
+                        <!-- OTP Code Box -->
+                        <div style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 2px dashed #cbd5e1; border-radius: 12px; padding: 28px; text-align: center; margin: 24px 0;">
+                          <p style="color: #64748b; margin: 0 0 12px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Mã xác thực của bạn</p>
+                          <div style="font-size: 40px; font-weight: 700; color: #667eea; letter-spacing: 8px; font-family: 'Courier New', monospace;">${code}</div>
+                        </div>
+                        
+                        <!-- Timer warning -->
+                        <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 24px 0;">
+                          <p style="color: #92400e; margin: 0; font-size: 14px;">
+                            ⏱️ <strong>Lưu ý:</strong> Mã này sẽ hết hạn sau <strong>15 phút</strong>
+                          </p>
+                        </div>
+                        
+                        <!-- Security note -->
+                        <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 24px 0 0 0;">
+                          🔒 Nếu bạn không thực hiện đăng ký này, vui lòng bỏ qua email này. Tài khoản của bạn vẫn an toàn.
+                        </p>
+                      </td>
+                    </tr>
+                    
+                    <!-- Divider -->
+                    <tr>
+                      <td style="padding: 0 40px;">
+                        <div style="border-top: 1px solid #e2e8f0;"></div>
+                      </td>
+                    </tr>
+                    
+                    <!-- Features section -->
+                    <tr>
+                      <td style="padding: 32px 40px;">
+                        <p style="color: #64748b; margin: 0 0 20px 0; font-size: 14px; font-weight: 600;">Sau khi xác thực, bạn có thể:</p>
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                          <tr>
+                            <td width="33%" style="text-align: center; padding: 8px;">
+                              <div style="background: #f0fdf4; border-radius: 12px; padding: 16px 8px;">
+                                <span style="font-size: 24px;">🛒</span>
+                                <p style="color: #166534; margin: 8px 0 0 0; font-size: 12px; font-weight: 500;">Mua xe đạp</p>
+                              </div>
+                            </td>
+                            <td width="33%" style="text-align: center; padding: 8px;">
+                              <div style="background: #eff6ff; border-radius: 12px; padding: 16px 8px;">
+                                <span style="font-size: 24px;">💬</span>
+                                <p style="color: #1e40af; margin: 8px 0 0 0; font-size: 12px; font-weight: 500;">Chat với người bán</p>
+                              </div>
+                            </td>
+                            <td width="33%" style="text-align: center; padding: 8px;">
+                              <div style="background: #fdf4ff; border-radius: 12px; padding: 16px 8px;">
+                                <span style="font-size: 24px;">⭐</span>
+                                <p style="color: #86198f; margin: 8px 0 0 0; font-size: 12px; font-weight: 500;">Đánh giá sản phẩm</p>
+                              </div>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                      <td style="background: #f8fafc; padding: 28px 40px; text-align: center;">
+                        <p style="color: #64748b; margin: 0 0 12px 0; font-size: 14px;">
+                          Cần hỗ trợ? Liên hệ <a href="mailto:support@velobike.vn" style="color: #667eea; text-decoration: none; font-weight: 500;">support@velobike.vn</a>
+                        </p>
+                        <p style="color: #94a3b8; margin: 0; font-size: 12px;">
+                          © 2025 VeloBike. All rights reserved.
+                        </p>
+                      </td>
+                    </tr>
+                    
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </body>
+          </html>
         `,
                 };
                 yield this.transporter.sendMail(mailOptions);

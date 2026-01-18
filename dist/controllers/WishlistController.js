@@ -23,9 +23,13 @@ class WishlistController {
      */
     static addToWishlist(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { listingId } = req.body;
-                const buyerId = req.userId;
+                const buyerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                if (!buyerId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
                 // Check if listing exists
                 const listing = yield Listing_1.Listing.findById(listingId);
                 if (!listing) {
@@ -65,9 +69,13 @@ class WishlistController {
      */
     static removeFromWishlist(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { listingId } = req.params;
-                const buyerId = req.userId;
+                const buyerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                if (!buyerId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
                 const wishlist = yield Wishlist_1.Wishlist.findOneAndDelete({
                     buyerId,
                     listingId,
@@ -93,8 +101,12 @@ class WishlistController {
      */
     static getWishlist(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
-                const buyerId = req.userId;
+                const buyerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                if (!buyerId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
                 const { page = 1, limit = 20, sort = "-addedAt" } = req.query;
                 const wishlistItems = yield Wishlist_1.Wishlist.find({ buyerId })
                     .populate({
@@ -133,9 +145,13 @@ class WishlistController {
      */
     static checkWishlist(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { listingId } = req.params;
-                const buyerId = req.userId;
+                const buyerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                if (!buyerId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
                 const wishlist = yield Wishlist_1.Wishlist.findOne({
                     buyerId,
                     listingId,
@@ -156,16 +172,21 @@ class WishlistController {
     }
     /**
      * Clear wishlist
-     * DELETE /api/wishlist
+     * DELETE /api/wishlist/clear
      */
     static clearWishlist(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
-                const buyerId = req.userId;
-                yield Wishlist_1.Wishlist.deleteMany({ buyerId });
+                const buyerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                if (!buyerId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
+                const result = yield Wishlist_1.Wishlist.deleteMany({ buyerId });
                 res.status(200).json({
                     success: true,
                     message: "Wishlist cleared",
+                    deletedCount: result.deletedCount,
                 });
             }
             catch (error) {
@@ -181,8 +202,12 @@ class WishlistController {
      */
     static getWishlistCount(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
-                const buyerId = req.userId;
+                const buyerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                if (!buyerId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
                 const count = yield Wishlist_1.Wishlist.countDocuments({ buyerId });
                 res.status(200).json({
                     success: true,

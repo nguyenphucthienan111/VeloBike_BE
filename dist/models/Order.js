@@ -59,6 +59,15 @@ const OrderSchema = new mongoose_1.Schema({
         enum: Object.values(OrderStatus),
         default: OrderStatus.CREATED,
     },
+    shippingAddress: {
+        fullName: String,
+        phone: String,
+        street: String,
+        district: String,
+        city: String,
+        province: String,
+        zipCode: String,
+    },
     financials: {
         totalAmount: { type: Number, required: true },
         itemPrice: { type: Number, required: true },

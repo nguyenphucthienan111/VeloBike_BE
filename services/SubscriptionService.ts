@@ -3,6 +3,17 @@ import { SellerSubscription, SubscriptionStatus, ISellerSubscription } from "../
 import { User } from "../models/User";
 import { Transaction } from "../models/Transaction";
 import { Types } from "mongoose";
+import { PayOS } from "@payos/node";
+
+// Initialize PayOS with SDK (same as PaymentService)
+const payOS = new PayOS({
+  clientId: process.env.PAYOS_CLIENT_ID || "",
+  apiKey: process.env.PAYOS_API_KEY || "",
+  checksumKey: process.env.PAYOS_CHECKSUM_KEY || ""
+});
+
+// Payment link expiration time (in minutes)
+const PAYMENT_LINK_EXPIRATION_MINUTES = 30;
 
 // Default plans configuration
 const DEFAULT_PLANS = [
@@ -420,5 +431,142 @@ export class SubscriptionService {
     }
 
     return { totalSubscribers, byPlan, monthlyRevenue };
+  }
+
+  /**
+   * Create payment link for subscription using PayOS SDK
+   */
+  static async createPaymentLink(
+    userId: string,
+    planType: PlanType,
+    user: any
+  ): Promise<{ paymentLink: string; orderCode: number }> {
+    try {
+      const plan = await this.getPlanByType(planType);
+      if (!plan) throw new Error("Plan not found");
+
+      const orderCode = Number(String(Date.now()).slice(-6));
+
+      // Set expiration time (default: 30 minutes from now)
+      const expiredAt = Math.floor(Date.now() / 1000) + (PAYMENT_LINK_EXPIRATION_MINUTES * 60);
+
+      const paymentData = {
+        orderCode,
+        amount: plan.price,
+        description: `VeloBike #${orderCode}`,
+        buyerName: user.fullName || "User",
+        buyerEmail: user.email || "",
+        buyerPhone: user.phone || "",
+        buyerAddress: user.address?.street || "",
+        items: [
+          {
+            name: plan.displayName,
+            quantity: 1,
+            price: plan.price,
+          },
+        ],
+        expiredAt, // Payment link expires after configured minutes
+        returnUrl: `${process.env.FRONTEND_URL || "http://localhost:3000"}/subscription/success`,
+        cancelUrl: `${process.env.FRONTEND_URL || "http://localhost:3000"}/subscription/cancel`,
+      };
+
+      // Use PayOS SDK to create payment link
+      const paymentLinkResponse = await payOS.paymentRequests.create(paymentData);
+
+      if (!paymentLinkResponse?.checkoutUrl) {
+        throw new Error("Failed to create payment link");
+      }
+
+      // Store orderCode mapping for webhook lookup
+      // Update or create subscription with pending payment info
+      let subscription = await SellerSubscription.findOne({ sellerId: new Types.ObjectId(userId) });
+      
+      if (subscription) {
+        // Update existing subscription with pending payment
+        subscription.pendingPayment = {
+          orderCode,
+          planType,
+          createdAt: new Date(),
+        };
+        await subscription.save();
+      } else {
+        // Create new subscription with FREE plan and pending payment
+        subscription = await this.createFreeSubscription(userId);
+        subscription.pendingPayment = {
+          orderCode,
+          planType,
+          createdAt: new Date(),
+        };
+        await subscription.save();
+      }
+
+      console.log(`Subscription payment link created: orderCode=${orderCode}, userId=${userId}, planType=${planType}`);
+
+      return { 
+        paymentLink: paymentLinkResponse.checkoutUrl, 
+        orderCode 
+      };
+    } catch (err: any) {
+      console.error("PayOS subscription payment link error:", err.message);
+      throw new Error(`Payment link creation failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * Handle webhook from PayOS for subscription payment
+   */
+  static async handleSubscriptionWebhook(webhookData: any): Promise<void> {
+    try {
+      const { orderCode, code, data } = webhookData;
+
+      console.log(`Subscription webhook received: orderCode=${orderCode}, code=${code}`);
+
+      // PayOS success code
+      if (code !== "00" && code !== "00000") {
+        console.log(`Subscription payment not successful: code=${code}`);
+        return;
+      }
+
+      if (data?.status !== "PAID") {
+        console.log(`Subscription payment status not PAID: ${data?.status}`);
+        return;
+      }
+
+      // Find subscription with pending payment matching this orderCode
+      const subscription = await SellerSubscription.findOne({
+        "pendingPayment.orderCode": orderCode,
+      });
+
+      if (!subscription) {
+        console.warn(`No subscription found with pending orderCode: ${orderCode}`);
+        return;
+      }
+
+      const { planType, sellerId } = subscription;
+      const pendingPlanType = (subscription as any).pendingPayment?.planType;
+
+      if (!pendingPlanType) {
+        console.warn(`No pending planType found for orderCode: ${orderCode}`);
+        return;
+      }
+
+      // Activate subscription
+      await this.subscribeToPlan(
+        sellerId.toString(),
+        pendingPlanType as PlanType,
+        data.transactionId || `payos_${orderCode}`
+      );
+
+      // Clear pending payment
+      await SellerSubscription.findOneAndUpdate(
+        { sellerId },
+        { $unset: { pendingPayment: "" } }
+      );
+
+      console.log(`Subscription activated via webhook: userId=${sellerId}, planType=${pendingPlanType}`);
+    } catch (err: any) {
+      console.error("Subscription webhook processing error:", err);
+      throw err;
+    }
   }
 }

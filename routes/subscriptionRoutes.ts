@@ -155,6 +155,57 @@ subscriptionRoutes.post("/subscribe", protect, SubscriptionController.subscribe 
 
 /**
  * @swagger
+ * /api/subscriptions/test-payment-success:
+ *   post:
+ *     summary: TEST ONLY - Simulate successful payment without actual payment
+ *     tags: [Subscriptions]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orderCode
+ *               - planType
+ *             properties:
+ *               orderCode:
+ *                 type: number
+ *                 description: The orderCode from create-payment-link
+ *               planType:
+ *                 type: string
+ *                 enum: [BASIC, PRO, PREMIUM]
+ *     responses:
+ *       200:
+ *         description: Test payment successful
+ */
+subscriptionRoutes.post("/test-payment-success", protect, SubscriptionController.testPaymentSuccess as any);
+
+/**
+ * @swagger
+ * /api/subscriptions/webhook:
+ *   post:
+ *     summary: Handle PayOS webhook for subscription payment
+ *     tags: [Subscriptions]
+ *     description: This endpoint is called by PayOS when a subscription payment is completed
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Webhook processed successfully
+ *       403:
+ *         description: Invalid signature
+ */
+subscriptionRoutes.post("/webhook", SubscriptionController.handleWebhook);
+
+/**
+ * @swagger
  * /api/admin/subscriptions/stats:
  *   get:
  *     summary: Get subscription statistics (Admin only)

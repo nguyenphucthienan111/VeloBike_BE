@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { SubscriptionService } from "../services/SubscriptionService";
 import { PlanType } from "../models/SubscriptionPlan";
-import { UserRole } from "../models/User";
+import { User, UserRole } from "../models/User";
 
 export class SubscriptionController {
   /**
@@ -153,9 +153,18 @@ export class SubscriptionController {
         return res.status(404).json({ success: false, message: "Plan not found" });
       }
 
-      // TODO: Integrate with PayOS to create payment link
-      // For now, return mock payment info
-      const orderCode = Math.floor(Math.random() * 1000000);
+      // Get user info for PayOS
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      // Create payment link using PayOS (same as PaymentService)
+      const result = await SubscriptionService.createPaymentLink(
+        userId,
+        planType as PlanType,
+        user
+      );
       
       res.json({
         success: true,
@@ -163,10 +172,9 @@ export class SubscriptionController {
           planType,
           planName: plan.displayName,
           amount: plan.price,
-          orderCode,
-          // In production, this would be a real PayOS payment link
-          paymentLink: `https://pay.payos.vn/web/${orderCode}`,
-          message: "Sau khi thanh toán, gọi POST /api/subscriptions/subscribe với transactionId",
+          orderCode: result.orderCode,
+          paymentLink: result.paymentLink,
+          message: "Sau khi thanh toán, gọi POST /api/subscriptions/subscribe với orderCode làm transactionId",
         },
       });
     } catch (error: any) {
@@ -229,6 +237,92 @@ export class SubscriptionController {
 
       res.json({ success: true, data: plan });
     } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * POST /api/subscriptions/test-payment-success
+   * TEST ONLY: Simulate successful payment without actual payment
+   */
+  static async testPaymentSuccess(req: any, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const { orderCode, planType } = req.body;
+
+      if (!orderCode) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "orderCode is required" 
+        });
+      }
+
+      if (!planType || !Object.values(PlanType).includes(planType)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Invalid plan type" 
+        });
+      }
+
+      // Simulate payment success - directly subscribe
+      const subscription = await SubscriptionService.subscribeToPlan(
+        userId,
+        planType as PlanType,
+        `test_${orderCode}`
+      );
+
+      const plan = await SubscriptionService.getPlanByType(planType as PlanType);
+
+      res.json({
+        success: true,
+        message: `[TEST MODE] Đăng ký ${plan?.displayName} thành công!`,
+        data: { 
+          subscription, 
+          plan,
+          note: "This is a test payment - no actual money was charged"
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * POST /api/subscriptions/webhook
+   * Handle PayOS webhook for subscription payment
+   */
+  static async handleWebhook(req: Request, res: Response) {
+    try {
+      // Validate signature header if provided
+      const signatureHeader = (req.headers["x-payos-signature"] ||
+        req.headers["x-signature"] ||
+        req.headers["signature"]) as string | undefined;
+
+      if (signatureHeader) {
+        // Import PaymentService for signature verification
+        const { PaymentService } = await import("../services/PaymentService");
+        const valid = PaymentService.verifyWebhookSignature(
+          req.body,
+          signatureHeader
+        );
+        if (!valid) {
+          console.warn("Invalid subscription webhook signature");
+          return res
+            .status(403)
+            .json({ success: false, message: "Invalid signature" });
+        }
+      }
+
+      // Process webhook
+      await SubscriptionService.handleSubscriptionWebhook(req.body);
+
+      res.json({ success: true, message: "Webhook processed" });
+    } catch (error: any) {
+      console.error("Subscription Webhook Error:", error);
       res.status(500).json({ success: false, message: error.message });
     }
   }

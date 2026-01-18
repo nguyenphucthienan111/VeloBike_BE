@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const google_auth_library_1 = require("google-auth-library");
+const cloudinary_1 = require("cloudinary");
 const User_1 = require("../models/User");
 const Otp_1 = require("../models/Otp");
 const EmailService_1 = require("../services/EmailService");
@@ -60,14 +61,10 @@ class AuthController {
                 // Attempt to send and log result to server console for debugging (useful when requests come from Swagger UI)
                 const _sent = yield EmailService_1.EmailService.sendVerificationEmail(email, newUser.fullName, code);
                 console.log(`AuthController.register: sendVerificationEmail -> ${email} => ${_sent ? "OK" : "FAILED"}`);
-                // Return tokens using new TokenService
-                const deviceInfo = TokenService_1.TokenService.extractDeviceInfo(req);
-                const { accessToken, refreshToken } = yield TokenService_1.TokenService.generateTokenPair(newUser, deviceInfo);
+                // Don't return tokens until email is verified
                 res.status(201).json({
                     success: true,
                     message: "Tài khoản đã được tạo. Vui lòng kiểm tra email để xác thực.",
-                    accessToken,
-                    refreshToken,
                     user: {
                         id: newUser._id,
                         email: newUser.email,
@@ -152,6 +149,12 @@ class AuthController {
                     return res
                         .status(401)
                         .json({ success: false, message: "Invalid credentials" });
+                // Check if email is verified
+                if (!user.emailVerified) {
+                    return res
+                        .status(403)
+                        .json({ success: false, message: "Vui lòng xác thực email trước khi đăng nhập" });
+                }
                 const deviceInfo = TokenService_1.TokenService.extractDeviceInfo(req);
                 const { accessToken, refreshToken } = yield TokenService_1.TokenService.generateTokenPair(user, deviceInfo);
                 res.json({
@@ -560,6 +563,78 @@ class AuthController {
                 res.json({ success: true, message: "KYC data submitted for review" });
             }
             catch (err) {
+                res.status(500).json({ success: false, message: err.message });
+            }
+        });
+    }
+    // POST /api/auth/kyc-upload
+    // Upload KYC documents with file upload (multipart/form-data)
+    static submitKycWithUpload(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b;
+            try {
+                const { documentType, documentId } = req.body;
+                const userId = req.user.id;
+                const files = req.files;
+                if (!documentType || !documentId) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "documentType và documentId là bắt buộc"
+                    });
+                }
+                if (!((_a = files === null || files === void 0 ? void 0 : files.frontImage) === null || _a === void 0 ? void 0 : _a[0]) || !((_b = files === null || files === void 0 ? void 0 : files.backImage) === null || _b === void 0 ? void 0 : _b[0])) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Vui lòng upload cả ảnh mặt trước và mặt sau"
+                    });
+                }
+                const user = yield User_1.User.findById(userId);
+                if (!user) {
+                    return res.status(404).json({ success: false, message: "User not found" });
+                }
+                // Configure Cloudinary
+                cloudinary_1.v2.config({
+                    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+                    api_key: process.env.CLOUDINARY_API_KEY,
+                    api_secret: process.env.CLOUDINARY_API_SECRET,
+                });
+                // Upload both images to Cloudinary
+                const [frontResult, backResult] = yield Promise.all([
+                    cloudinary_1.v2.uploader.upload(files.frontImage[0].path, {
+                        folder: "velobike_kyc",
+                        resource_type: "image",
+                    }),
+                    cloudinary_1.v2.uploader.upload(files.backImage[0].path, {
+                        folder: "velobike_kyc",
+                        resource_type: "image",
+                    }),
+                ]);
+                // Save KYC data
+                user.kycData = {
+                    documentType,
+                    documentId,
+                    frontImage: frontResult.secure_url,
+                    backImage: backResult.secure_url,
+                    verifiedAt: undefined,
+                };
+                if (user.kycStatus !== User_1.KycStatus.VERIFIED) {
+                    user.kycStatus = User_1.KycStatus.PENDING;
+                }
+                yield user.save();
+                res.json({
+                    success: true,
+                    message: "KYC đã được gửi thành công, vui lòng chờ Admin duyệt",
+                    data: {
+                        documentType,
+                        documentId,
+                        frontImage: frontResult.secure_url,
+                        backImage: backResult.secure_url,
+                        status: user.kycStatus,
+                    }
+                });
+            }
+            catch (err) {
+                console.error("KYC Upload Error:", err);
                 res.status(500).json({ success: false, message: err.message });
             }
         });

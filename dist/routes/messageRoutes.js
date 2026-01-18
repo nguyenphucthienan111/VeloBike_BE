@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.messageRoutes = void 0;
 const express_1 = require("express");
 const MessageController_1 = require("../controllers/MessageController");
+const authMiddleware_1 = require("../middleware/authMiddleware");
 exports.messageRoutes = (0, express_1.Router)();
 /**
  * @swagger
@@ -30,7 +31,7 @@ exports.messageRoutes = (0, express_1.Router)();
  *       200:
  *         description: Conversation retrieved or created
  */
-exports.messageRoutes.get("/conversation/:userId", MessageController_1.MessageController.getOrCreateConversation);
+exports.messageRoutes.get("/conversation/:userId", authMiddleware_1.protect, MessageController_1.MessageController.getOrCreateConversation);
 /**
  * @swagger
  * /api/messages:
@@ -64,7 +65,7 @@ exports.messageRoutes.get("/conversation/:userId", MessageController_1.MessageCo
  *       201:
  *         description: Message sent
  */
-exports.messageRoutes.post("/", MessageController_1.MessageController.sendMessage);
+exports.messageRoutes.post("/", authMiddleware_1.protect, MessageController_1.MessageController.sendMessage);
 /**
  * @swagger
  * /api/messages/list/{conversationId}:
@@ -91,7 +92,7 @@ exports.messageRoutes.post("/", MessageController_1.MessageController.sendMessag
  *       200:
  *         description: Messages list
  */
-exports.messageRoutes.get("/list/:conversationId", MessageController_1.MessageController.getMessages);
+exports.messageRoutes.get("/list/:conversationId", authMiddleware_1.protect, MessageController_1.MessageController.getMessages);
 /**
  * @swagger
  * /api/messages/conversations:
@@ -113,7 +114,7 @@ exports.messageRoutes.get("/list/:conversationId", MessageController_1.MessageCo
  *       200:
  *         description: Conversations list
  */
-exports.messageRoutes.get("/conversations", MessageController_1.MessageController.getUserConversations);
+exports.messageRoutes.get("/conversations", authMiddleware_1.protect, MessageController_1.MessageController.getUserConversations);
 /**
  * @swagger
  * /api/messages/unread:
@@ -126,7 +127,7 @@ exports.messageRoutes.get("/conversations", MessageController_1.MessageControlle
  *       200:
  *         description: Unread count
  */
-exports.messageRoutes.get("/unread", MessageController_1.MessageController.getUnreadCount);
+exports.messageRoutes.get("/unread", authMiddleware_1.protect, MessageController_1.MessageController.getUnreadCount);
 /**
  * @swagger
  * /api/messages/{messageId}/read:
@@ -145,7 +146,7 @@ exports.messageRoutes.get("/unread", MessageController_1.MessageController.getUn
  *       200:
  *         description: Message marked as read
  */
-exports.messageRoutes.put("/:messageId/read", MessageController_1.MessageController.markAsRead);
+exports.messageRoutes.put("/:messageId/read", authMiddleware_1.protect, MessageController_1.MessageController.markAsRead);
 /**
  * @swagger
  * /api/messages/{messageId}:
@@ -164,7 +165,7 @@ exports.messageRoutes.put("/:messageId/read", MessageController_1.MessageControl
  *       200:
  *         description: Message deleted
  */
-exports.messageRoutes.delete("/:messageId", MessageController_1.MessageController.deleteMessage);
+exports.messageRoutes.delete("/:messageId", authMiddleware_1.protect, MessageController_1.MessageController.deleteMessage);
 /**
  * @swagger
  * /api/messages/conversation/{conversationId}/close:
@@ -183,5 +184,5 @@ exports.messageRoutes.delete("/:messageId", MessageController_1.MessageControlle
  *       200:
  *         description: Conversation closed
  */
-exports.messageRoutes.put("/conversation/:conversationId/close", MessageController_1.MessageController.closeConversation);
+exports.messageRoutes.put("/conversation/:conversationId/close", authMiddleware_1.protect, MessageController_1.MessageController.closeConversation);
 //# sourceMappingURL=messageRoutes.js.map
