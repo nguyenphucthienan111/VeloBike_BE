@@ -102,13 +102,22 @@ const transitionHandler = async (req: any, res: any) => {
  *                 example: "6968dc1e784ea62dc2355d96"
  *               inspectionRequired:
  *                 type: boolean
- *                 description: Có yêu cầu kiểm tra xe không (mặc định true)
+ *                 description: |
+ *                   Buyer có muốn kiểm định không (mặc định true).
+ *                   
+ *                   **Quy tắc:**
+ *                   - Nếu Listing.inspectionRequired = false → Buyer KHÔNG THỂ chọn kiểm định
+ *                   - Nếu Listing.inspectionRequired = true → Buyer có thể chọn có/không
+ *                   
+ *                   **Chi phí:**
+ *                   - Có kiểm định: +500,000 VNĐ
+ *                   - Không kiểm định: Tiết kiệm 500k nhưng rủi ro cao hơn
  *                 default: true
  *     responses:
  *       201:
  *         description: Order created successfully
  *       400:
- *         description: Bad request (listing not found, already sold, etc.)
+ *         description: Bad request (listing not found, already sold, inspection conflict, etc.)
  *       401:
  *         description: Unauthorized
  */

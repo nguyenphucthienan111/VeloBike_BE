@@ -45,6 +45,18 @@ export class OrderController {
           .json({ success: false, message: "Cannot buy your own listing" });
       }
 
+      // Validate inspection requirement
+      // If listing doesn't require inspection, buyer cannot request it
+      if (!listing.inspectionRequired && inspectionRequired) {
+        return res.status(400).json({
+          success: false,
+          message: "Seller không yêu cầu kiểm định cho xe này. Bạn không thể chọn kiểm định.",
+        });
+      }
+
+      // Final inspection decision: listing requires AND buyer agrees
+      const finalInspectionRequired = listing.inspectionRequired && inspectionRequired;
+
       // Check if there's already an active order for this listing
       const existingOrder = await Order.findOne({
         listingId,
@@ -91,7 +103,7 @@ export class OrderController {
       const order = await OrderService.createOrder(
         listingId,
         buyerId,
-        inspectionRequired
+        finalInspectionRequired
       );
 
       res.status(201).json({
