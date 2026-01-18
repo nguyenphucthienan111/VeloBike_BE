@@ -45,6 +45,7 @@ import { bulkRoutes } from "./routes/bulkRoutes";
 import { reportRoutes } from "./routes/reportRoutes";
 import { transactionRoutes } from "./routes/transactionRoutes";
 import { subscriptionRoutes } from "./routes/subscriptionRoutes";
+import { analyticsRoutes } from "./routes/analyticsRoutes";
 import userRoutes from "./routes/userRoutes";
 
 // Import Subscription Service for initialization
@@ -281,6 +282,7 @@ app.use("/api/bulk", bulkRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 // Health Check Endpoint
 app.get("/health", async (req, res) => {

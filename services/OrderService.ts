@@ -127,6 +127,16 @@ export class OrderService {
     // Get seller's commission rate from subscription
     const commissionRate = await SubscriptionService.getCommissionRate(listing.sellerId.toString());
     
+    // Check if seller has free inspection quota
+    let finalInspectionFee = inspectionFee;
+    if (inspectionRequired) {
+      const hasFreeInspection = await SubscriptionService.canUseFreeInspection(listing.sellerId.toString());
+      if (hasFreeInspection) {
+        finalInspectionFee = 0; // Free inspection for this seller
+        console.log(`Free inspection applied for seller ${listing.sellerId}`);
+      }
+    }
+    
     const shippingFee = 150000; // Example: VND
     const platformFee = Math.ceil(listing.pricing.amount * commissionRate); // Dynamic based on subscription
 
@@ -137,12 +147,12 @@ export class OrderService {
       status: OrderStatus.CREATED,
       financials: {
         itemPrice: listing.pricing.amount,
-        inspectionFee: inspectionRequired ? inspectionFee : 0,
+        inspectionFee: inspectionRequired ? finalInspectionFee : 0,
         shippingFee,
         platformFee,
         totalAmount:
           listing.pricing.amount +
-          (inspectionRequired ? inspectionFee : 0) +
+          (inspectionRequired ? finalInspectionFee : 0) +
           shippingFee,
       },
       timeline: [
@@ -211,13 +221,21 @@ export class OrderService {
     orderId: string,
     inspectorId: string
   ): Promise<IOrder> {
-    return this.transitionStatus(
+    const order = await this.transitionStatus(
       orderId,
       OrderStatus.INSPECTION_PASSED,
       inspectorId,
       undefined,
       "Inspection passed"
     );
+
+    // Increment inspection count if it was free
+    if (order.financials.inspectionFee === 0) {
+      await SubscriptionService.incrementInspectionCount(order.sellerId.toString());
+      console.log(`Free inspection used for seller ${order.sellerId}`);
+    }
+
+    return order;
   }
 
   /**

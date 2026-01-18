@@ -145,7 +145,7 @@ export class AdminController {
   }
 
   /**
-   * Get all listings for moderation
+   * Get all listings for moderation (with priority sorting for pending approvals)
    * GET /api/admin/listings
    */
   static async getAllListings(req: Request, res: Response) {
@@ -155,11 +155,45 @@ export class AdminController {
       const query: any = {};
       if (status) query.status = status;
 
-      const listings = await Listing.find(query)
+      let listings = await Listing.find(query)
         .populate("sellerId", "fullName email reputation")
         .sort({ createdAt: -1 })
         .skip((Number(page) - 1) * Number(limit))
-        .limit(Number(limit));
+        .limit(Number(limit))
+        .lean();
+
+      // If filtering PENDING_APPROVAL, sort by subscription priority
+      if (status === "PENDING_APPROVAL") {
+        const { SubscriptionService } = await import("../services/SubscriptionService");
+        
+        // Enrich with seller priority
+        listings = await Promise.all(
+          listings.map(async (listing: any) => {
+            const subscription = await SubscriptionService.getSellerSubscription(
+              listing.sellerId._id || listing.sellerId
+            );
+            if (subscription) {
+              const plan = await SubscriptionService.getPlanByType(subscription.planType);
+              listing.priorityLevel = plan?.priorityLevel || 0;
+              listing.approvalTimeHours = plan?.approvalTimeHours || 48;
+              listing.sellerPlanType = subscription.planType;
+            } else {
+              listing.priorityLevel = 0;
+              listing.approvalTimeHours = 48;
+              listing.sellerPlanType = "FREE";
+            }
+            return listing;
+          })
+        );
+
+        // Sort by priority (highest first), then by createdAt (oldest first)
+        listings.sort((a: any, b: any) => {
+          if (a.priorityLevel !== b.priorityLevel) {
+            return b.priorityLevel - a.priorityLevel; // Higher priority first
+          }
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(); // Older first
+        });
+      }
 
       const total = await Listing.countDocuments(query);
 

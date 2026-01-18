@@ -249,7 +249,7 @@ export class SubscriptionService {
     canCreate: boolean;
     reason?: string;
     used: number;
-    limit: number;
+    limit: number | string;
     planType: PlanType;
   }> {
     let subscription = await this.getSellerSubscription(sellerId);
@@ -289,7 +289,7 @@ export class SubscriptionService {
       return {
         canCreate: true,
         used: subscription.listingsUsedThisMonth,
-        limit: -1,
+        limit: "unlimited",
         planType: subscription.planType,
       };
     }
@@ -335,9 +335,38 @@ export class SubscriptionService {
   }
 
   /**
+   * Check if seller can use free inspection
+   */
+  static async canUseFreeInspection(sellerId: string): Promise<boolean> {
+    const subscription = await this.getSellerSubscription(sellerId);
+    if (!subscription) return false;
+
+    const plan = await this.getPlanByType(subscription.planType);
+    if (!plan || plan.freeInspectionsPerMonth === 0) return false;
+
+    // Reset monthly quota if needed
+    await this.resetMonthlyQuotaIfNeeded(subscription);
+
+    // Check if still has free inspections left
+    return subscription.inspectionsUsedThisMonth < plan.freeInspectionsPerMonth;
+  }
+
+  /**
+   * Increment inspection count when seller uses free inspection
+   */
+  static async incrementInspectionCount(sellerId: string): Promise<void> {
+    await SellerSubscription.findOneAndUpdate(
+      { sellerId },
+      { $inc: { inspectionsUsedThisMonth: 1 } }
+    );
+  }
+
+  /**
    * Reset monthly quota if new month
    */
   private static async resetMonthlyQuotaIfNeeded(subscription: ISellerSubscription): Promise<void> {
+    if (!subscription) return;
+    
     const now = new Date();
     const lastReset = new Date(subscription.lastResetDate);
     
@@ -491,13 +520,13 @@ export class SubscriptionService {
         await subscription.save();
       } else {
         // Create new subscription with FREE plan and pending payment
-        subscription = await this.createFreeSubscription(userId);
-        subscription.pendingPayment = {
+        const newSubscription = await this.createFreeSubscription(userId);
+        newSubscription.pendingPayment = {
           orderCode,
           planType,
           createdAt: new Date(),
         };
-        await subscription.save();
+        await newSubscription.save();
       }
 
       console.log(`Subscription payment link created: orderCode=${orderCode}, userId=${userId}, planType=${planType}`);

@@ -72,6 +72,11 @@ export interface IListing extends MongooseDocument {
   inspectionScore?: number;
   inspectionReport?: Types.ObjectId;
   views: number;
+  
+  // Boost feature
+  boostedUntil?: Date; // Thời gian boost hết hạn
+  boostCount: number; // Số lần đã boost
+  
   createdAt: Date;
 }
 
@@ -160,6 +165,10 @@ const ListingSchema = new Schema<IListing>(
     inspectionScore: { type: Number, min: 1, max: 10 },
     inspectionReport: { type: Schema.Types.ObjectId, ref: "Inspection" },
     views: { type: Number, default: 0, index: true },
+    
+    // Boost feature
+    boostedUntil: { type: Date, index: true }, // Thời gian boost hết hạn
+    boostCount: { type: Number, default: 0 }, // Số lần đã boost
   },
   {
     timestamps: true,

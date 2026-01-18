@@ -49,6 +49,38 @@ listingRoutes.get("/", ListingController.getAll as any);
 
 /**
  * @swagger
+ * /api/listings/featured:
+ *   get:
+ *     summary: Get featured listings (PREMIUM sellers only)
+ *     tags: [Listings]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: number
+ *           default: 10
+ *         description: Number of featured listings to return
+ *     responses:
+ *       200:
+ *         description: Featured listings from PREMIUM sellers
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 count:
+ *                   type: integer
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Listing'
+ */
+listingRoutes.get("/featured", ListingController.getFeatured as any);
+
+/**
+ * @swagger
  * /api/listings/my-listings:
  *   get:
  *     summary: Get seller's listings
@@ -651,3 +683,69 @@ listingRoutes.delete("/:id", protect, ListingController.delete as any);
  *     tags: [Listings]
  */
 listingRoutes.put("/:id/view", ListingController.incrementView as any);
+
+/**
+ * @swagger
+ * /api/listings/{id}/boost:
+ *   post:
+ *     summary: Boost a listing to appear higher in search results (2 days per boost)
+ *     tags: [Listings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Listing ID
+ *     responses:
+ *       200:
+ *         description: Listing boosted successfully for 2 days
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                   example: "Listing boosted successfully for 2 days!"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     listing:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         title:
+ *                           type: string
+ *                         boostedUntil:
+ *                           type: string
+ *                           format: date-time
+ *                           description: Thời gian boost hết hạn
+ *                         boostCount:
+ *                           type: number
+ *                           description: Tổng số lần đã boost listing này
+ *                     boostUsage:
+ *                       type: object
+ *                       properties:
+ *                         used:
+ *                           type: number
+ *                           description: Số lượt boost đã dùng trong tuần
+ *                         limit:
+ *                           type: number
+ *                           description: Tổng số lượt boost/tuần
+ *                         remaining:
+ *                           type: number
+ *                           description: Số lượt boost còn lại trong tuần
+ *       400:
+ *         description: Boost quota exceeded or invalid listing status
+ *       403:
+ *         description: Not authorized
+ *       404:
+ *         description: Listing not found
+ */
+listingRoutes.post("/:id/boost", protect, ListingController.boostListing as any);
