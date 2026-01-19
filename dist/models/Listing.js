@@ -130,6 +130,9 @@ const ListingSchema = new mongoose_1.Schema({
     inspectionScore: { type: Number, min: 1, max: 10 },
     inspectionReport: { type: mongoose_1.Schema.Types.ObjectId, ref: "Inspection" },
     views: { type: Number, default: 0, index: true },
+    // Boost feature
+    boostedUntil: { type: Date, index: true }, // Thời gian boost hết hạn
+    boostCount: { type: Number, default: 0 }, // Số lần đã boost
 }, {
     timestamps: true,
     discriminatorKey: "type",

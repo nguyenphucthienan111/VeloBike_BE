@@ -443,8 +443,10 @@ export class InspectionController {
 
       // 4. Save Inspection Report with Grade
       const newInspection = new Inspection({
+        listingId: order.listingId, // Required field
         orderId,
         inspectorId,
+        type: "POST_SALE_ORDER", // This is post-sale inspection for an order
         checkpoints,
         overallVerdict: finalVerdict,
         overallScore: finalScore,

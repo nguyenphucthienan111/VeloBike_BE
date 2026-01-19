@@ -195,14 +195,46 @@ export class PaymentController {
       } as any);
       await order.save();
 
+      // Auto-trigger inspection if required (same as real webhook)
+      const updatedOrder = await Order.findById(orderId).populate("listingId");
+      if (updatedOrder) {
+        const listing = updatedOrder.listingId as any;
+        if (listing && listing.inspectionRequired) {
+          // Find available inspector
+          const { User } = await import("../models/User");
+          const inspector = await User.findOne({
+            role: UserRole.INSPECTOR,
+            isActive: true,
+          });
+
+          if (inspector) {
+            // Assign inspector and start inspection
+            updatedOrder.inspectorId = inspector._id;
+            await updatedOrder.save();
+            await OrderService.startInspection(orderId, inspector._id.toString());
+            
+            console.log(`[SIMULATED] Inspection auto-started for order ${orderId} with inspector ${inspector._id}`);
+          } else {
+            console.warn(`[SIMULATED] No available inspector found for order ${orderId}`);
+          }
+        } else {
+          console.log(`[SIMULATED] Order ${orderId} does not require inspection`);
+        }
+      }
+
+      // Fetch final order status
+      const finalOrder = await Order.findById(orderId);
+
       res.json({
         success: true,
         message: "Thanh toán đã được simulate thành công",
         data: {
-          orderId: order._id,
-          status: order.status,
+          orderId: finalOrder?._id,
+          status: finalOrder?.status,
+          inspectorId: finalOrder?.inspectorId,
           escrowStatus: "LOCKED",
           amount: order.financials.totalAmount,
+          inspectionTriggered: finalOrder?.status === OrderStatus.IN_INSPECTION,
           note: "Đây là thanh toán giả lập cho môi trường dev. Trong production, dùng PayOS thật."
         }
       });

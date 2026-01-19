@@ -385,6 +385,85 @@ export class OrderController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  // POST /api/orders/:id/start-inspection
+  // Manually start inspection (Admin only - for debugging)
+  static async startInspection(req: any, res: any) {
+    try {
+      const { id } = req.params;
+      const { inspectorId } = req.body;
+      const userRole = req.user?.role;
+
+      // Only admin can manually trigger inspection
+      if (userRole !== UserRole.ADMIN) {
+        return res.status(403).json({ 
+          success: false, 
+          message: "Only admin can manually start inspection" 
+        });
+      }
+
+      const order = await Order.findById(id).populate("listingId");
+      if (!order) {
+        return res.status(404).json({ success: false, message: "Order not found" });
+      }
+
+      // Check if order is in correct status
+      if (order.status !== OrderStatus.ESCROW_LOCKED) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `Cannot start inspection from status ${order.status}. Order must be ESCROW_LOCKED.` 
+        });
+      }
+
+      // Check if listing requires inspection
+      const listing = order.listingId as any;
+      if (!listing || !listing.inspectionRequired) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Listing does not require inspection" 
+        });
+      }
+
+      // If inspectorId provided, use it. Otherwise find one
+      let finalInspectorId = inspectorId;
+      if (!finalInspectorId) {
+        const { User } = await import("../models/User");
+        const inspector = await User.findOne({
+          role: UserRole.INSPECTOR,
+          isActive: true,
+        });
+        
+        if (!inspector) {
+          return res.status(404).json({ 
+            success: false, 
+            message: "No available inspector found. Please create an inspector user first." 
+          });
+        }
+        
+        finalInspectorId = inspector._id.toString();
+      }
+
+      // Assign inspector and start inspection
+      order.inspectorId = finalInspectorId as any;
+      await order.save();
+
+      await OrderService.startInspection(id, finalInspectorId);
+
+      const updatedOrder = await Order.findById(id)
+        .populate("listingId")
+        .populate("buyerId", "fullName")
+        .populate("sellerId", "fullName")
+        .populate("inspectorId", "fullName");
+
+      res.json({ 
+        success: true, 
+        data: updatedOrder,
+        message: `Inspection started with inspector ${finalInspectorId}` 
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
 
 

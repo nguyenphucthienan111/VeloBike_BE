@@ -340,6 +340,51 @@ orderRoutes.put("/:id/shipping-address", protect, OrderController.updateShipping
 
 /**
  * @swagger
+ * /api/orders/{id}/start-inspection:
+ *   post:
+ *     summary: Manually start inspection (Admin only - for debugging)
+ *     description: |
+ *       Admin manually trigger inspection cho order đang ở trạng thái ESCROW_LOCKED.
+ *       Dùng để debug khi auto-trigger inspection không hoạt động.
+ *       
+ *       **Yêu cầu:**
+ *       - Order phải ở trạng thái ESCROW_LOCKED
+ *       - Listing phải có inspectionRequired = true
+ *       - Phải có inspector trong database
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Order ID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               inspectorId:
+ *                 type: string
+ *                 description: Inspector ID (tùy chọn, nếu không có sẽ tự động tìm)
+ *                 example: "6968d4defea9a1162ce2fd09"
+ *     responses:
+ *       200:
+ *         description: Inspection started successfully
+ *       400:
+ *         description: Invalid order status or listing doesn't require inspection
+ *       403:
+ *         description: Only admin can manually start inspection
+ *       404:
+ *         description: Order not found or no inspector available
+ */
+orderRoutes.post("/:id/start-inspection", protect, OrderController.startInspection as any);
+
+/**
+ * @swagger
  * /api/orders/{id}/escrow-status:
  *   get:
  *     summary: Get escrow status and transaction history for an order

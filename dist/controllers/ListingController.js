@@ -12,7 +12,91 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ListingController = void 0;
 const Listing_1 = require("../models/Listing");
 const SubscriptionService_1 = require("../services/SubscriptionService");
+/**
+ * Helper function to enrich seller info with subscription badge
+ */
+function enrichSellerWithBadge(listing) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (!listing.sellerId)
+            return listing;
+        const subscription = yield SubscriptionService_1.SubscriptionService.getSellerSubscription(listing.sellerId._id || listing.sellerId);
+        if (subscription) {
+            const plan = yield SubscriptionService_1.SubscriptionService.getPlanByType(subscription.planType);
+            if (plan && plan.badge) {
+                // Add badge to seller info
+                if (typeof listing.sellerId === 'object') {
+                    listing.sellerId.badge = plan.badge;
+                    listing.sellerId.planType = subscription.planType;
+                }
+            }
+        }
+        return listing;
+    });
+}
+/**
+ * Helper function to enrich multiple listings with seller badges
+ */
+function enrichListingsWithBadges(listings) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return Promise.all(listings.map(listing => enrichSellerWithBadge(listing)));
+    });
+}
 class ListingController {
+    // GET /api/listings/featured
+    // Get featured listings (PREMIUM sellers only)
+    static getFeatured(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { limit = 10 } = req.query;
+                // Get all published listings
+                let listings = yield Listing_1.Listing.find({ status: "PUBLISHED" })
+                    .populate("sellerId", "fullName reputation")
+                    .lean();
+                // Filter only PREMIUM sellers
+                const featuredListings = [];
+                for (const listing of listings) {
+                    const subscription = yield SubscriptionService_1.SubscriptionService.getSellerSubscription(listing.sellerId._id || listing.sellerId);
+                    if (subscription && subscription.planType === "PREMIUM") {
+                        const plan = yield SubscriptionService_1.SubscriptionService.getPlanByType(subscription.planType);
+                        if (plan) {
+                            // Add badge and priority info
+                            if (typeof listing.sellerId === 'object') {
+                                listing.sellerId.badge = plan.badge;
+                                listing.sellerId.planType = subscription.planType;
+                            }
+                            listing.priorityLevel = plan.priorityLevel;
+                            featuredListings.push(listing);
+                        }
+                    }
+                }
+                // Sort by: 1. Boosted, 2. Views, 3. Newest
+                const now = new Date();
+                featuredListings.sort((a, b) => {
+                    // 1. Boosted first
+                    const aBoost = a.boostedUntil && new Date(a.boostedUntil) > now ? 1 : 0;
+                    const bBoost = b.boostedUntil && new Date(b.boostedUntil) > now ? 1 : 0;
+                    if (aBoost !== bBoost)
+                        return bBoost - aBoost;
+                    // 2. Most views
+                    if ((b.views || 0) !== (a.views || 0)) {
+                        return (b.views || 0) - (a.views || 0);
+                    }
+                    // 3. Newest
+                    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                });
+                // Limit results
+                const limitedListings = featuredListings.slice(0, Number(limit));
+                res.json({
+                    success: true,
+                    count: limitedListings.length,
+                    data: limitedListings,
+                });
+            }
+            catch (error) {
+                res.status(500).json({ success: false, message: error.message });
+            }
+        });
+    }
     // GET /api/listings
     static getAll(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -31,10 +115,43 @@ class ListingController {
                     if (maxPrice)
                         query["pricing.amount"].$lte = Number(maxPrice);
                 }
-                const listings = yield Listing_1.Listing.find(query)
-                    .sort({ createdAt: -1 })
-                    .populate("sellerId", "fullName reputation");
-                res.json({ success: true, count: listings.length, data: listings });
+                let listings = yield Listing_1.Listing.find(query)
+                    .populate("sellerId", "fullName reputation")
+                    .lean(); // Use lean for better performance
+                // Enrich with seller badges
+                listings = yield enrichListingsWithBadges(listings);
+                // Get seller subscriptions for priority sorting
+                const listingsWithPriority = yield Promise.all(listings.map((listing) => __awaiter(this, void 0, void 0, function* () {
+                    const subscription = yield SubscriptionService_1.SubscriptionService.getSellerSubscription(listing.sellerId._id || listing.sellerId);
+                    if (subscription) {
+                        const plan = yield SubscriptionService_1.SubscriptionService.getPlanByType(subscription.planType);
+                        listing.priorityLevel = (plan === null || plan === void 0 ? void 0 : plan.priorityLevel) || 0;
+                    }
+                    else {
+                        listing.priorityLevel = 0;
+                    }
+                    return listing;
+                })));
+                // Sort by: 1. Boosted, 2. Priority Level, 3. Created Date
+                const now = new Date();
+                const sortedListings = listingsWithPriority.sort((a, b) => {
+                    // 1. Boosted listings first
+                    const aBoost = a.boostedUntil && new Date(a.boostedUntil) > now ? 1 : 0;
+                    const bBoost = b.boostedUntil && new Date(b.boostedUntil) > now ? 1 : 0;
+                    if (aBoost !== bBoost)
+                        return bBoost - aBoost;
+                    // 2. Priority level (higher is better)
+                    if (a.priorityLevel !== b.priorityLevel) {
+                        return b.priorityLevel - a.priorityLevel;
+                    }
+                    // 3. Newest first
+                    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                });
+                res.json({
+                    success: true,
+                    count: sortedListings.length,
+                    data: sortedListings
+                });
             }
             catch (error) {
                 res.status(500).json({ success: false, message: error.message });
@@ -45,11 +162,15 @@ class ListingController {
     static getById(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const listing = yield Listing_1.Listing.findById(req.params.id).populate("sellerId", "fullName reputation");
+                let listing = yield Listing_1.Listing.findById(req.params.id)
+                    .populate("sellerId", "fullName reputation")
+                    .lean();
                 if (!listing) {
                     res.status(404).json({ success: false, message: "Listing not found" });
                     return;
                 }
+                // Enrich with seller badge
+                listing = yield enrichSellerWithBadge(listing);
                 res.json({ success: true, data: listing });
             }
             catch (error) {
@@ -748,6 +869,87 @@ class ListingController {
                     success: true,
                     message: "Search saved successfully",
                     data: savedSearch,
+                });
+            }
+            catch (error) {
+                res.status(500).json({ success: false, message: error.message });
+            }
+        });
+    }
+    // POST /api/listings/:id/boost
+    // Boost a listing to appear higher in search results
+    static boostListing(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            try {
+                const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+                const { id } = req.params;
+                const BOOST_DURATION_DAYS = 2; // Fixed: 1 lượt boost = 2 ngày
+                if (!userId) {
+                    return res.status(401).json({ success: false, message: "Unauthorized" });
+                }
+                // Find listing
+                const listing = yield Listing_1.Listing.findById(id);
+                if (!listing) {
+                    return res.status(404).json({ success: false, message: "Listing not found" });
+                }
+                // Check ownership
+                if (listing.sellerId.toString() !== userId) {
+                    return res.status(403).json({ success: false, message: "You can only boost your own listings" });
+                }
+                // Check if listing is published
+                if (listing.status !== Listing_1.ListingStatus.PUBLISHED) {
+                    return res.status(400).json({ success: false, message: "Only published listings can be boosted" });
+                }
+                // Get seller's subscription
+                const subscription = yield SubscriptionService_1.SubscriptionService.getSellerSubscription(userId);
+                if (!subscription) {
+                    return res.status(400).json({ success: false, message: "No active subscription found" });
+                }
+                // Get plan details
+                const plan = yield SubscriptionService_1.SubscriptionService.getPlanByType(subscription.planType);
+                if (!plan) {
+                    return res.status(400).json({ success: false, message: "Plan not found" });
+                }
+                // Reset weekly boost quota if needed
+                yield SubscriptionService_1.SubscriptionService.resetWeeklyBoostIfNeeded(subscription);
+                // Check boost quota
+                if (subscription.boostsUsedThisWeek >= plan.boostPerWeek) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Bạn đã sử dụng hết ${plan.boostPerWeek} lần boost trong tuần. Nâng cấp gói để boost thêm!`,
+                        data: {
+                            used: subscription.boostsUsedThisWeek,
+                            limit: plan.boostPerWeek,
+                            planType: subscription.planType,
+                        },
+                    });
+                }
+                // Boost the listing
+                const boostedUntil = new Date();
+                boostedUntil.setDate(boostedUntil.getDate() + BOOST_DURATION_DAYS);
+                listing.boostedUntil = boostedUntil;
+                listing.boostCount = (listing.boostCount || 0) + 1;
+                yield listing.save();
+                // Increment boost usage
+                subscription.boostsUsedThisWeek += 1;
+                yield subscription.save();
+                res.json({
+                    success: true,
+                    message: `Listing boosted successfully for ${BOOST_DURATION_DAYS} days!`,
+                    data: {
+                        listing: {
+                            id: listing._id,
+                            title: listing.title,
+                            boostedUntil: listing.boostedUntil,
+                            boostCount: listing.boostCount,
+                        },
+                        boostUsage: {
+                            used: subscription.boostsUsedThisWeek,
+                            limit: plan.boostPerWeek,
+                            remaining: plan.boostPerWeek - subscription.boostsUsedThisWeek,
+                        },
+                    },
                 });
             }
             catch (error) {

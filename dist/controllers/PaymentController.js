@@ -45,6 +45,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaymentController = void 0;
 const Order_1 = require("../models/Order");
 const OrderService_1 = require("../services/OrderService");
+const User_1 = require("../models/User");
 const PaymentService_1 = require("../services/PaymentService");
 class PaymentController {
     // POST /api/payment/create-link
@@ -212,14 +213,44 @@ class PaymentController {
                     note: "[SIMULATED] Payment confirmed - Escrow locked",
                 });
                 yield order.save();
+                // Auto-trigger inspection if required (same as real webhook)
+                const updatedOrder = yield Order_1.Order.findById(orderId).populate("listingId");
+                if (updatedOrder) {
+                    const listing = updatedOrder.listingId;
+                    if (listing && listing.inspectionRequired) {
+                        // Find available inspector
+                        const { User } = yield Promise.resolve().then(() => __importStar(require("../models/User")));
+                        const inspector = yield User.findOne({
+                            role: User_1.UserRole.INSPECTOR,
+                            isActive: true,
+                        });
+                        if (inspector) {
+                            // Assign inspector and start inspection
+                            updatedOrder.inspectorId = inspector._id;
+                            yield updatedOrder.save();
+                            yield OrderService_1.OrderService.startInspection(orderId, inspector._id.toString());
+                            console.log(`[SIMULATED] Inspection auto-started for order ${orderId} with inspector ${inspector._id}`);
+                        }
+                        else {
+                            console.warn(`[SIMULATED] No available inspector found for order ${orderId}`);
+                        }
+                    }
+                    else {
+                        console.log(`[SIMULATED] Order ${orderId} does not require inspection`);
+                    }
+                }
+                // Fetch final order status
+                const finalOrder = yield Order_1.Order.findById(orderId);
                 res.json({
                     success: true,
                     message: "Thanh toán đã được simulate thành công",
                     data: {
-                        orderId: order._id,
-                        status: order.status,
+                        orderId: finalOrder === null || finalOrder === void 0 ? void 0 : finalOrder._id,
+                        status: finalOrder === null || finalOrder === void 0 ? void 0 : finalOrder.status,
+                        inspectorId: finalOrder === null || finalOrder === void 0 ? void 0 : finalOrder.inspectorId,
                         escrowStatus: "LOCKED",
                         amount: order.financials.totalAmount,
+                        inspectionTriggered: (finalOrder === null || finalOrder === void 0 ? void 0 : finalOrder.status) === Order_1.OrderStatus.IN_INSPECTION,
                         note: "Đây là thanh toán giả lập cho môi trường dev. Trong production, dùng PayOS thật."
                     }
                 });

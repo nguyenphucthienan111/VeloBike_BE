@@ -178,7 +178,7 @@ class AdminController {
         });
     }
     /**
-     * Get all listings for moderation
+     * Get all listings for moderation (with priority sorting for pending approvals)
      * GET /api/admin/listings
      */
     static getAllListings(req, res) {
@@ -188,11 +188,39 @@ class AdminController {
                 const query = {};
                 if (status)
                     query.status = status;
-                const listings = yield Listing_1.Listing.find(query)
+                let listings = yield Listing_1.Listing.find(query)
                     .populate("sellerId", "fullName email reputation")
                     .sort({ createdAt: -1 })
                     .skip((Number(page) - 1) * Number(limit))
-                    .limit(Number(limit));
+                    .limit(Number(limit))
+                    .lean();
+                // If filtering PENDING_APPROVAL, sort by subscription priority
+                if (status === "PENDING_APPROVAL") {
+                    const { SubscriptionService } = yield Promise.resolve().then(() => __importStar(require("../services/SubscriptionService")));
+                    // Enrich with seller priority
+                    listings = yield Promise.all(listings.map((listing) => __awaiter(this, void 0, void 0, function* () {
+                        const subscription = yield SubscriptionService.getSellerSubscription(listing.sellerId._id || listing.sellerId);
+                        if (subscription) {
+                            const plan = yield SubscriptionService.getPlanByType(subscription.planType);
+                            listing.priorityLevel = (plan === null || plan === void 0 ? void 0 : plan.priorityLevel) || 0;
+                            listing.approvalTimeHours = (plan === null || plan === void 0 ? void 0 : plan.approvalTimeHours) || 48;
+                            listing.sellerPlanType = subscription.planType;
+                        }
+                        else {
+                            listing.priorityLevel = 0;
+                            listing.approvalTimeHours = 48;
+                            listing.sellerPlanType = "FREE";
+                        }
+                        return listing;
+                    })));
+                    // Sort by priority (highest first), then by createdAt (oldest first)
+                    listings.sort((a, b) => {
+                        if (a.priorityLevel !== b.priorityLevel) {
+                            return b.priorityLevel - a.priorityLevel; // Higher priority first
+                        }
+                        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(); // Older first
+                    });
+                }
                 const total = yield Listing_1.Listing.countDocuments(query);
                 res.status(200).json({
                     success: true,

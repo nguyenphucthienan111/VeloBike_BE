@@ -55,6 +55,8 @@ const bulkRoutes_1 = require("./routes/bulkRoutes");
 const reportRoutes_1 = require("./routes/reportRoutes");
 const transactionRoutes_1 = require("./routes/transactionRoutes");
 const subscriptionRoutes_1 = require("./routes/subscriptionRoutes");
+const analyticsRoutes_1 = require("./routes/analyticsRoutes");
+const debugRoutes_1 = require("./routes/debugRoutes");
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 // Import Subscription Service for initialization
 const SubscriptionService_1 = require("./services/SubscriptionService");
@@ -269,6 +271,8 @@ app.use("/api/bulk", bulkRoutes_1.bulkRoutes);
 app.use("/api/reports", reportRoutes_1.reportRoutes);
 app.use("/api/transactions", transactionRoutes_1.transactionRoutes);
 app.use("/api/subscriptions", subscriptionRoutes_1.subscriptionRoutes);
+app.use("/api/analytics", analyticsRoutes_1.analyticsRoutes);
+app.use("/api/debug", debugRoutes_1.debugRoutes);
 // Health Check Endpoint
 app.get("/health", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const cacheStats = yield CacheService_1.CacheService.getStats();

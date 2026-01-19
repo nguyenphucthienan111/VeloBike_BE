@@ -26,6 +26,8 @@ const payOS = new node_1.PayOS({
     apiKey: process.env.PAYOS_API_KEY || "",
     checksumKey: process.env.PAYOS_CHECKSUM_KEY || ""
 });
+// Payment link expiration time (in minutes)
+const PAYMENT_LINK_EXPIRATION_MINUTES = 30;
 class PaymentService {
     /**
      * Create payment link using PayOS SDK
@@ -39,6 +41,8 @@ class PaymentService {
                     throw new Error("Order not found");
                 const buyer = order.buyerId;
                 const orderCode = Number(String(Date.now()).slice(-6));
+                // Set expiration time (default: 30 minutes from now)
+                const expiredAt = Math.floor(Date.now() / 1000) + (PAYMENT_LINK_EXPIRATION_MINUTES * 60);
                 const paymentData = {
                     orderCode,
                     amount: order.financials.totalAmount,
@@ -54,6 +58,7 @@ class PaymentService {
                             price: order.financials.itemPrice,
                         },
                     ],
+                    expiredAt, // Payment link expires after configured minutes
                     returnUrl,
                     cancelUrl,
                 };

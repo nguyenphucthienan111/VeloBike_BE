@@ -44,21 +44,24 @@ export class ListingController {
         .lean();
 
       // Filter only PREMIUM sellers
-      const featuredListings = [];
+      const featuredListings: any[] = [];
       for (const listing of listings) {
-        const subscription = await SubscriptionService.getSellerSubscription(
-          listing.sellerId._id || listing.sellerId
-        );
+        const listingAny = listing as any;
+        const sellerId = listingAny.sellerId?._id?.toString() || listingAny.sellerId?.toString();
+        
+        if (!sellerId) continue;
+        
+        const subscription = await SubscriptionService.getSellerSubscription(sellerId);
         if (subscription && subscription.planType === "PREMIUM") {
           const plan = await SubscriptionService.getPlanByType(subscription.planType);
           if (plan) {
             // Add badge and priority info
-            if (typeof listing.sellerId === 'object') {
-              listing.sellerId.badge = plan.badge;
-              listing.sellerId.planType = subscription.planType;
+            if (typeof listingAny.sellerId === 'object' && listingAny.sellerId) {
+              listingAny.sellerId.badge = plan.badge;
+              listingAny.sellerId.planType = subscription.planType;
             }
-            listing.priorityLevel = plan.priorityLevel;
-            featuredListings.push(listing);
+            listingAny.priorityLevel = plan.priorityLevel;
+            featuredListings.push(listingAny);
           }
         }
       }

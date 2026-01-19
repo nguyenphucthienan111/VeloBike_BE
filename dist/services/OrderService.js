@@ -68,6 +68,15 @@ class OrderService {
             }
             // Get seller's commission rate from subscription
             const commissionRate = yield SubscriptionService_1.SubscriptionService.getCommissionRate(listing.sellerId.toString());
+            // Check if seller has free inspection quota
+            let finalInspectionFee = inspectionFee;
+            if (inspectionRequired) {
+                const hasFreeInspection = yield SubscriptionService_1.SubscriptionService.canUseFreeInspection(listing.sellerId.toString());
+                if (hasFreeInspection) {
+                    finalInspectionFee = 0; // Free inspection for this seller
+                    console.log(`Free inspection applied for seller ${listing.sellerId}`);
+                }
+            }
             const shippingFee = 150000; // Example: VND
             const platformFee = Math.ceil(listing.pricing.amount * commissionRate); // Dynamic based on subscription
             const order = new Order_1.Order({
@@ -77,11 +86,11 @@ class OrderService {
                 status: Order_1.OrderStatus.CREATED,
                 financials: {
                     itemPrice: listing.pricing.amount,
-                    inspectionFee: inspectionRequired ? inspectionFee : 0,
+                    inspectionFee: inspectionRequired ? finalInspectionFee : 0,
                     shippingFee,
                     platformFee,
                     totalAmount: listing.pricing.amount +
-                        (inspectionRequired ? inspectionFee : 0) +
+                        (inspectionRequired ? finalInspectionFee : 0) +
                         shippingFee,
                 },
                 timeline: [
@@ -128,7 +137,13 @@ class OrderService {
      */
     static inspectionPassed(orderId, inspectorId) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.transitionStatus(orderId, Order_1.OrderStatus.INSPECTION_PASSED, inspectorId, undefined, "Inspection passed");
+            const order = yield this.transitionStatus(orderId, Order_1.OrderStatus.INSPECTION_PASSED, inspectorId, undefined, "Inspection passed");
+            // Increment inspection count if it was free
+            if (order.financials.inspectionFee === 0) {
+                yield SubscriptionService_1.SubscriptionService.incrementInspectionCount(order.sellerId.toString());
+                console.log(`Free inspection used for seller ${order.sellerId}`);
+            }
+            return order;
         });
     }
     /**
