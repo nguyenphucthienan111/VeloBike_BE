@@ -13,7 +13,7 @@ export class DisputeController {
   static async openDispute(req: Request, res: Response) {
     try {
       const { orderId, reason, description, evidence } = req.body;
-      const claimantId = (req as any).userId;
+      const claimantId = (req as any).user?.id; // Fix: use req.user.id
 
       // Verify order exists
       const order = await Order.findById(orderId);
@@ -100,7 +100,7 @@ export class DisputeController {
    */
   static async getUserDisputes(req: Request, res: Response) {
     try {
-      const userId = (req as any).userId;
+      const userId = (req as any).user?.id; // Fix: use req.user.id instead of req.userId
       const { status, page = 1, limit = 10 } = req.query;
 
       const query: any = {
@@ -146,7 +146,7 @@ export class DisputeController {
     try {
       const { disputeId } = req.params;
       const { resolution, compensationAmount } = req.body;
-      const adminId = (req as any).userId;
+      const adminId = (req as any).user?.id; // Fix: use req.user.id
 
       // Verify admin role
       const admin = await User.findById(adminId);
@@ -178,9 +178,16 @@ export class DisputeController {
       if (compensationAmount && compensationAmount > 0) {
         const recipient = await User.findById(dispute.claimantId);
         if (recipient) {
+          const oldBalance = recipient.wallet.balance;
           recipient.wallet.balance += compensationAmount;
           await recipient.save();
+          
+          console.log(`[DISPUTE REFUND] User ${recipient._id} balance: ${oldBalance} -> ${recipient.wallet.balance} (+${compensationAmount})`);
+        } else {
+          console.error(`[DISPUTE REFUND ERROR] Recipient not found: ${dispute.claimantId}`);
         }
+      } else {
+        console.log(`[DISPUTE REFUND] No compensation amount specified: ${compensationAmount}`);
       }
 
       res.status(200).json({
@@ -202,7 +209,7 @@ export class DisputeController {
   static async reviewDispute(req: Request, res: Response) {
     try {
       const { disputeId } = req.params;
-      const adminId = (req as any).userId;
+      const adminId = (req as any).user?.id; // Fix: use req.user.id
 
       // Verify admin role
       const admin = await User.findById(adminId);
@@ -239,7 +246,7 @@ export class DisputeController {
   static async closeDispute(req: Request, res: Response) {
     try {
       const { disputeId } = req.params;
-      const adminId = (req as any).userId;
+      const adminId = (req as any).user?.id; // Fix: use req.user.id
 
       // Verify admin role
       const admin = await User.findById(adminId);
@@ -277,7 +284,7 @@ export class DisputeController {
     try {
       const { disputeId } = req.params;
       const { evidence } = req.body;
-      const userId = (req as any).userId;
+      const userId = (req as any).user?.id; // Fix: use req.user.id
 
       const dispute = await Dispute.findById(disputeId);
       if (!dispute) {

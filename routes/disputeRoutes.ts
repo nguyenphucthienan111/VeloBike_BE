@@ -14,64 +14,6 @@ export const disputeRoutes = Router();
 
 /**
  * @swagger
- * /api/disputes:
- *   post:
- *     summary: Mở tranh chấp (Buyer/Seller)
- *     description: |
- *       Buyer hoặc Seller có thể mở tranh chấp khi có vấn đề với đơn hàng.
- *       Evidence có thể là URL ảnh (upload trước qua POST /api/upload).
- *     tags: [Disputes]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - orderId
- *               - reason
- *               - description
- *             properties:
- *               orderId:
- *                 type: string
- *                 description: ID đơn hàng
- *                 example: "6969db87ecf2d0f6e982f793"
- *               reason:
- *                 type: string
- *                 enum:
- *                   - ITEM_NOT_RECEIVED
- *                   - ITEM_NOT_AS_DESCRIBED
- *                   - ITEM_DAMAGED
- *                   - QUALITY_ISSUE
- *                   - PAYMENT_ISSUE
- *                   - INSPECTION_DISPUTE
- *                   - OTHER
- *                 description: Lý do tranh chấp
- *                 example: "ITEM_NOT_AS_DESCRIBED"
- *               description:
- *                 type: string
- *                 description: Mô tả chi tiết vấn đề
- *                 example: "Xe có vết xước lớn không được mô tả trong tin đăng"
- *               evidence:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Danh sách URL ảnh/video làm bằng chứng
- *                 example: ["https://res.cloudinary.com/xxx/image1.jpg", "https://res.cloudinary.com/xxx/image2.jpg"]
- *     responses:
- *       201:
- *         description: Dispute opened successfully
- *       400:
- *         description: Invalid request
- *       401:
- *         description: Unauthorized
- */
-disputeRoutes.post("/", protect, DisputeController.openDispute as any);
-
-/**
- * @swagger
  * /api/disputes/admin/all:
  *   get:
  *     summary: Xem tất cả tranh chấp (Admin only)
@@ -132,6 +74,64 @@ disputeRoutes.get("/admin/all", protect, authorize(UserRole.ADMIN), DisputeContr
  *         description: User's disputes
  */
 disputeRoutes.get("/", protect, DisputeController.getUserDisputes as any);
+
+/**
+ * @swagger
+ * /api/disputes:
+ *   post:
+ *     summary: Mở tranh chấp (Buyer/Seller)
+ *     description: |
+ *       Buyer hoặc Seller có thể mở tranh chấp khi có vấn đề với đơn hàng.
+ *       Evidence có thể là URL ảnh (upload trước qua POST /api/upload).
+ *     tags: [Disputes]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orderId
+ *               - reason
+ *               - description
+ *             properties:
+ *               orderId:
+ *                 type: string
+ *                 description: ID đơn hàng
+ *                 example: "6969db87ecf2d0f6e982f793"
+ *               reason:
+ *                 type: string
+ *                 enum:
+ *                   - ITEM_NOT_RECEIVED
+ *                   - ITEM_NOT_AS_DESCRIBED
+ *                   - ITEM_DAMAGED
+ *                   - QUALITY_ISSUE
+ *                   - PAYMENT_ISSUE
+ *                   - INSPECTION_DISPUTE
+ *                   - OTHER
+ *                 description: Lý do tranh chấp
+ *                 example: "ITEM_NOT_AS_DESCRIBED"
+ *               description:
+ *                 type: string
+ *                 description: Mô tả chi tiết vấn đề
+ *                 example: "Xe có vết xước lớn không được mô tả trong tin đăng"
+ *               evidence:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Danh sách URL ảnh/video làm bằng chứng
+ *                 example: ["https://res.cloudinary.com/xxx/image1.jpg", "https://res.cloudinary.com/xxx/image2.jpg"]
+ *     responses:
+ *       201:
+ *         description: Dispute opened successfully
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Unauthorized
+ */
+disputeRoutes.post("/", protect, DisputeController.openDispute as any);
 
 /**
  * @swagger
