@@ -46,6 +46,7 @@ class ListingController {
     // Get featured listings (PREMIUM sellers only)
     static getFeatured(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b, _c;
             try {
                 const { limit = 10 } = req.query;
                 // Get all published listings
@@ -55,17 +56,21 @@ class ListingController {
                 // Filter only PREMIUM sellers
                 const featuredListings = [];
                 for (const listing of listings) {
-                    const subscription = yield SubscriptionService_1.SubscriptionService.getSellerSubscription(listing.sellerId._id || listing.sellerId);
+                    const listingAny = listing;
+                    const sellerId = ((_b = (_a = listingAny.sellerId) === null || _a === void 0 ? void 0 : _a._id) === null || _b === void 0 ? void 0 : _b.toString()) || ((_c = listingAny.sellerId) === null || _c === void 0 ? void 0 : _c.toString());
+                    if (!sellerId)
+                        continue;
+                    const subscription = yield SubscriptionService_1.SubscriptionService.getSellerSubscription(sellerId);
                     if (subscription && subscription.planType === "PREMIUM") {
                         const plan = yield SubscriptionService_1.SubscriptionService.getPlanByType(subscription.planType);
                         if (plan) {
                             // Add badge and priority info
-                            if (typeof listing.sellerId === 'object') {
-                                listing.sellerId.badge = plan.badge;
-                                listing.sellerId.planType = subscription.planType;
+                            if (typeof listingAny.sellerId === 'object' && listingAny.sellerId) {
+                                listingAny.sellerId.badge = plan.badge;
+                                listingAny.sellerId.planType = subscription.planType;
                             }
-                            listing.priorityLevel = plan.priorityLevel;
-                            featuredListings.push(listing);
+                            listingAny.priorityLevel = plan.priorityLevel;
+                            featuredListings.push(listingAny);
                         }
                     }
                 }

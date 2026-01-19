@@ -345,9 +345,27 @@ exports.adminRoutes.delete("/brands/:id", CategoryController_1.BrandController.d
  * /api/admin/orders/{id}/payout:
  *   put:
  *     summary: Release payout to seller (Admin only)
+ *     description: Giải ngân tiền cho seller sau khi order hoàn tất. Tự động phân chia tiền cho seller, inspector, và platform.
  *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Order ID
+ *         example: "696cba63ad1e5d95a2bcde45"
+ *     responses:
+ *       200:
+ *         description: Payout released successfully
+ *       400:
+ *         description: Order not in correct status
+ *       403:
+ *         description: Admin only
+ *       404:
+ *         description: Order not found
  */
 exports.adminRoutes.put("/orders/:id/payout", authMiddleware_1.protect, (0, authMiddleware_1.authorize)(User_1.UserRole.ADMIN), AdminController_1.AdminController.releasePayout);
 /**

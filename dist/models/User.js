@@ -80,6 +80,11 @@ const UserSchema = new mongoose_1.Schema({
         frontImage: String,
         backImage: String,
         verifiedAt: Date,
+        confidence: Number,
+        documentData: mongoose_1.Schema.Types.Mixed,
+        faceMatchScore: Number,
+        verifiedBy: String,
+        note: String,
     },
     bodyMeasurements: {
         height: Number, // cm

@@ -1,9 +1,123 @@
 import { Request, Response } from "express";
 import { User, KycStatus } from "../models/User";
 import { NotificationService } from "../services/NotificationService";
+import { FptAiService } from "../services/FptAiService";
 import crypto from "crypto";
 
 export class KycController {
+  /**
+   * Submit eKYC verification with FPT AI
+   */
+  static async submitEkyc(req: any, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      // Check if files are uploaded
+      if (!req.files || !req.files.idCardFront || !req.files.selfie) {
+        return res.status(400).json({
+          success: false,
+          message: "Please upload both ID card front and selfie images",
+        });
+      }
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      // Check if already verified
+      if (user.kycStatus === KycStatus.VERIFIED) {
+        return res.status(400).json({
+          success: false,
+          message: "Your account is already verified",
+        });
+      }
+
+      // Get image buffers
+      const idCardFrontBuffer = req.files.idCardFront[0].buffer;
+      const selfieBuffer = req.files.selfie[0].buffer;
+
+      // Verify with FPT AI
+      const verificationResult = await FptAiService.verifyEkyc(
+        idCardFrontBuffer,
+        selfieBuffer
+      );
+
+      if (!verificationResult.success) {
+        user.kycStatus = KycStatus.REJECTED;
+        await user.save();
+
+        return res.status(400).json({
+          success: false,
+          message: verificationResult.message,
+        });
+      }
+
+      // Update user with verification data
+      user.kycStatus = KycStatus.VERIFIED;
+      user.kycData = {
+        ...user.kycData,
+        verifiedAt: new Date(),
+        confidence: verificationResult.data!.faceMatch.similarity,
+        documentData: verificationResult.data!.idInfo,
+        faceMatchScore: verificationResult.data!.faceMatch.similarity,
+      } as any;
+
+      await user.save();
+
+      // Send notification
+      await NotificationService.sendNotification(
+        userId,
+        "KYC Verification Successful",
+        "Your identity has been successfully verified",
+        { kycStatus: KycStatus.VERIFIED }
+      );
+
+      res.json({
+        success: true,
+        message: "eKYC verification successful",
+        data: {
+          kycStatus: user.kycStatus,
+          verifiedAt: user.kycData?.verifiedAt,
+        },
+      });
+    } catch (error: any) {
+      console.error("eKYC submission error:", error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Get current user's KYC status
+   */
+  static async getMyKycStatus(req: any, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const user = await User.findById(userId).select("kycStatus kycData");
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          kycStatus: user.kycStatus,
+          verifiedAt: user.kycData?.verifiedAt,
+          documentData: user.kycData?.documentData,
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
   /**
    * Handle eKYC webhook from provider (e.g., VNPT, FPT AI)
    */

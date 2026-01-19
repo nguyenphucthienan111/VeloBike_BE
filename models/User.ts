@@ -37,6 +37,11 @@ export interface IUser extends MongooseDocument {
     frontImage?: string;
     backImage?: string;
     verifiedAt?: Date;
+    confidence?: number;
+    documentData?: any;
+    faceMatchScore?: number;
+    verifiedBy?: string;
+    note?: string;
   };
   bodyMeasurements?: {
     height?: number;
@@ -96,6 +101,11 @@ const UserSchema = new Schema<IUser>(
       frontImage: String,
       backImage: String,
       verifiedAt: Date,
+      confidence: Number,
+      documentData: Schema.Types.Mixed,
+      faceMatchScore: Number,
+      verifiedBy: String,
+      note: String,
     },
     bodyMeasurements: {
       height: Number, // cm

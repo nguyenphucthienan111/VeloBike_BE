@@ -53,6 +53,13 @@ class ReviewController {
                     revieweeId: order.sellerId,
                     rating,
                     comment,
+                    type: "BUYER", // Buyer reviewing seller
+                    categories: req.body.categories || {
+                        itemAccuracy: rating,
+                        communication: rating,
+                        shipping: rating,
+                        packaging: rating,
+                    },
                 });
                 yield review.save();
                 // Update Seller Reputation

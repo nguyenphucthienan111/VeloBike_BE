@@ -57,6 +57,8 @@ const transactionRoutes_1 = require("./routes/transactionRoutes");
 const subscriptionRoutes_1 = require("./routes/subscriptionRoutes");
 const analyticsRoutes_1 = require("./routes/analyticsRoutes");
 const debugRoutes_1 = require("./routes/debugRoutes");
+const walletRoutes_1 = require("./routes/walletRoutes");
+const walletRoutes_2 = require("./routes/walletRoutes");
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 // Import Subscription Service for initialization
 const SubscriptionService_1 = require("./services/SubscriptionService");
@@ -273,6 +275,8 @@ app.use("/api/transactions", transactionRoutes_1.transactionRoutes);
 app.use("/api/subscriptions", subscriptionRoutes_1.subscriptionRoutes);
 app.use("/api/analytics", analyticsRoutes_1.analyticsRoutes);
 app.use("/api/debug", debugRoutes_1.debugRoutes);
+app.use("/api/wallet", walletRoutes_1.walletRoutes);
+app.use("/api/admin/withdrawals", walletRoutes_2.adminWithdrawalRoutes);
 // Health Check Endpoint
 app.get("/health", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const cacheStats = yield CacheService_1.CacheService.getStats();
