@@ -6,7 +6,7 @@ export class TokenService {
   private static JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
   
   // Token expiration times
-  private static ACCESS_TOKEN_EXPIRY = "15m"; // 15 minutes
+  private static ACCESS_TOKEN_EXPIRY = "1h"; // 1 hour
 
   /**
    * Generate access token (short-lived)
