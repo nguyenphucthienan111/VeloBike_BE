@@ -23,6 +23,12 @@ Thông tin về VeloBike:
 - Có hệ thống đánh giá và phản hồi
 - Hỗ trợ KYC để xác thực người bán
 
+Gói subscription cho Seller:
+- FREE: 2 tin đăng/tháng, phí 12%
+- BASIC (99k/tháng): 10 tin đăng/tháng, phí 10%, badge Verified
+- PRO (299k/tháng): 30 tin đăng/tháng, phí 8%, badge Pro, 1 boost/tuần
+- PREMIUM (599k/tháng): Không giới hạn tin đăng, phí 5%, badge Premium, 3 boost/tuần, 2 kiểm định miễn phí/tháng, chat không giới hạn
+
 Hãy trả lời bằng tiếng Việt, thân thiện và chuyên nghiệp. Nếu không biết thông tin cụ thể, hãy gợi ý liên hệ hotline hoặc hướng dẫn sử dụng tính năng trên app.
 `;
 
