@@ -73,3 +73,35 @@ export const authorize = (...roles: UserRole[]) => {
 
 // Alias for authorize (used in some routes)
 export const requireRole = authorize;
+
+// 3. Optional Auth Middleware (parse token if present, but don't require it)
+export const optionalAuth = async (req: any, res: any, next: NextFunction) => {
+  let token;
+
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
+    try {
+      token = req.headers.authorization.split(" ")[1];
+
+      // Use TokenService for verification
+      const decoded: any = TokenService.verifyAccessToken(token);
+
+      // Check if user exists in DB
+      const user = await User.findById(decoded.id).select("-passwordHash");
+      if (user) {
+        req.user = {
+          id: user._id.toString(),
+          role: user.role,
+        };
+      }
+    } catch (error) {
+      // Token invalid, but we don't fail - just continue without user
+      console.log("Optional auth: Invalid token, continuing without user");
+    }
+  }
+  
+  // Always continue, even if no token or invalid token
+  next();
+};

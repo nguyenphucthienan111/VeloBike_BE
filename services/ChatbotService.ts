@@ -1,10 +1,13 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-// import { ChatbotConversation } from "../models/ChatbotConversation"; // Uncomment when needed
+import { ChatbotConversation } from "../models/ChatbotConversation";
+import { User } from "../models/User";
+import { SubscriptionService } from "./SubscriptionService";
 
 export class ChatbotService {
   // Initialize Gemini AI - make sure dotenv.config() runs before this
   private static genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-  private static model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  // Using gemini-1.5-flash: 1,500 requests/day (vs gemini-2.5-flash: only 20 requests/day)
+  private static model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
   /**
    * VeloBike context for AI responses
@@ -23,6 +26,73 @@ Thông tin về VeloBike:
 Hãy trả lời bằng tiếng Việt, thân thiện và chuyên nghiệp. Nếu không biết thông tin cụ thể, hãy gợi ý liên hệ hotline hoặc hướng dẫn sử dụng tính năng trên app.
 `;
 
+  /**
+   * Check if user can send message (rate limiting)
+   */
+  static async canSendMessage(userId: string): Promise<{ allowed: boolean; remaining: number; message?: string }> {
+    try {
+      // Check if user exists
+      const user = await User.findById(userId);
+      if (!user) {
+        return { allowed: false, remaining: 0, message: "User not found. Please login." };
+      }
+
+      // Check subscription status
+      // Only SELLER with PREMIUM subscription gets unlimited chat
+      let isPremium = false;
+      
+      if (user.role === "SELLER") {
+        const subscription = await SubscriptionService.getSellerSubscription(userId);
+        isPremium = subscription?.planType === "PREMIUM" && subscription?.status === "ACTIVE";
+      }
+      
+      if (isPremium) {
+        return { allowed: true, remaining: -1 }; // -1 means unlimited
+      }
+
+      // For regular users: 25 messages per day
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const todayMessages = await ChatbotConversation.aggregate([
+        {
+          $match: {
+            userId: userId,
+            createdAt: { $gte: today }
+          }
+        },
+        {
+          $unwind: "$messages"
+        },
+        {
+          $match: {
+            "messages.sender": "USER"
+          }
+        },
+        {
+          $count: "total"
+        }
+      ]);
+
+      const messageCount = todayMessages[0]?.total || 0;
+      const limit = 25;
+      const remaining = Math.max(0, limit - messageCount);
+
+      if (messageCount >= limit) {
+        return { 
+          allowed: false, 
+          remaining: 0,
+          message: "Bạn đã hết lượt chat hôm nay (25/25). Nâng cấp Premium để chat không giới hạn!" 
+        };
+      }
+
+      return { allowed: true, remaining };
+    } catch (error) {
+      console.error("Error checking rate limit:", error);
+      return { allowed: true, remaining: 25 }; // Fail open
+    }
+  }
+
   static async processMessage(userId: string, message: string): Promise<string> {
     console.log("=== ChatbotService.processMessage START ===");
     console.log("Input:", { userId, message });
@@ -35,6 +105,7 @@ Hãy trả lời bằng tiếng Việt, thân thiện và chuyên nghiệp. Nế
       // 2. Try Gemini AI FIRST (prioritize AI over keywords)
       console.log("Step 2: Calling Gemini AI...");
       console.log("API Key available:", process.env.GEMINI_API_KEY ? "Yes" : "No");
+      console.log("API Key (first 10 chars):", process.env.GEMINI_API_KEY?.substring(0, 10));
       
       if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "") {
         try {
@@ -42,6 +113,8 @@ Hãy trả lời bằng tiếng Việt, thân thiện và chuyên nghiệp. Nế
           const contextualPrompt = this.buildEnhancedPrompt(message, history);
           
           console.log("Sending to Gemini AI with enhanced prompt...");
+          console.log("Prompt length:", contextualPrompt.length);
+          
           const result = await this.model.generateContent(contextualPrompt);
           const response = result.response;
           const aiResponse = response.text();
@@ -50,8 +123,14 @@ Hãy trả lời bằng tiếng Việt, thân thiện và chuyên nghiệp. Nế
           await this.saveConversation(userId, aiResponse, "bot");
           return aiResponse;
           
-        } catch (aiError) {
+        } catch (aiError: any) {
           console.error("❌ Gemini AI Error:", aiError);
+          console.error("Error details:", {
+            message: aiError.message,
+            status: aiError.status,
+            statusText: aiError.statusText,
+            name: aiError.name
+          });
           console.log("Falling back to keyword-based responses...");
         }
       } else {
@@ -219,15 +298,35 @@ HƯỚNG DẪN TRẢ LỜI:
    */
   private static async saveConversation(userId: string, message: string, sender: 'user' | 'bot'): Promise<void> {
     try {
-      // For now, just log the conversation - we can implement proper storage later
-      console.log(`[CHATBOT] ${sender.toUpperCase()}: ${message}`);
+      if (!userId || userId === 'guest') {
+        console.log('[CHATBOT] Skipping save for guest user');
+        return;
+      }
+
+      // Find or create today's conversation
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       
-      // TODO: Implement proper conversation storage with ChatbotConversation model
-      // The current model uses a different schema (sessionId + messages array)
-      // We would need to either update the model or adapt the storage logic
+      const sessionId = `${userId}_${today.toISOString().split('T')[0]}`;
+
+      await ChatbotConversation.findOneAndUpdate(
+        { sessionId },
+        {
+          $setOnInsert: { userId, sessionId },
+          $push: {
+            messages: {
+              sender: sender === 'user' ? 'USER' : 'BOT',
+              text: message,
+              timestamp: new Date()
+            }
+          }
+        },
+        { upsert: true, new: true }
+      );
+
+      console.log(`[CHATBOT] Saved ${sender.toUpperCase()} message for user ${userId}`);
     } catch (error) {
       console.error("Error saving conversation:", error);
-      // Don't throw error, just log it
     }
   }
 
@@ -236,9 +335,27 @@ HƯỚNG DẪN TRẢ LỜI:
    */
   private static async getRecentConversation(userId: string, limit: number = 5): Promise<any[]> {
     try {
-      // For now, return empty array - implement proper history retrieval later
-      console.log(`Getting conversation history for user ${userId}, limit: ${limit}`);
-      return [];
+      if (!userId || userId === 'guest') {
+        return [];
+      }
+
+      const conversations = await ChatbotConversation.find({ userId })
+        .sort({ createdAt: -1 })
+        .limit(1);
+
+      if (conversations.length === 0) {
+        return [];
+      }
+
+      const recentMessages = conversations[0].messages
+        .slice(-limit * 2) // Get last N pairs (user + bot)
+        .map(msg => ({
+          sender: msg.sender.toLowerCase(),
+          message: msg.text
+        }));
+
+      console.log(`Got ${recentMessages.length} recent messages for user ${userId}`);
+      return recentMessages;
     } catch (error) {
       console.error("Error getting conversation history:", error);
       return [];
@@ -250,15 +367,51 @@ HƯỚNG DẪN TRẢ LỜI:
    */
   static async getConversationStats(): Promise<any> {
     try {
-      // For now, return mock stats - implement proper stats later
+      const totalConversations = await ChatbotConversation.countDocuments();
+      const uniqueUsers = await ChatbotConversation.distinct('userId');
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayConversations = await ChatbotConversation.countDocuments({
+        createdAt: { $gte: today }
+      });
+
       return {
-        totalConversations: 0,
-        uniqueUsers: 0,
-        todayConversations: 0
+        totalConversations,
+        uniqueUsers: uniqueUsers.length,
+        todayConversations
       };
     } catch (error) {
       console.error("Error getting conversation stats:", error);
       return null;
+    }
+  }
+
+  /**
+   * Get user's conversations with pagination
+   */
+  static async getUserConversations(userId: string, skip: number = 0, limit: number = 10): Promise<any[]> {
+    try {
+      return await ChatbotConversation.find({ userId })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select('sessionId messages createdAt updatedAt');
+    } catch (error) {
+      console.error("Error getting user conversations:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Get total conversation count for user
+   */
+  static async getConversationCount(userId: string): Promise<number> {
+    try {
+      return await ChatbotConversation.countDocuments({ userId });
+    } catch (error) {
+      console.error("Error getting conversation count:", error);
+      return 0;
     }
   }
 }

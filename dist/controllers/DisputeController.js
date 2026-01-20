@@ -25,9 +25,10 @@ class DisputeController {
      */
     static openDispute(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { orderId, reason, description, evidence } = req.body;
-                const claimantId = req.userId;
+                const claimantId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id; // Fix: use req.user.id
                 // Verify order exists
                 const order = yield Order_1.Order.findById(orderId);
                 if (!order) {
@@ -105,8 +106,9 @@ class DisputeController {
      */
     static getUserDisputes(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
-                const userId = req.userId;
+                const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id; // Fix: use req.user.id instead of req.userId
                 const { status, page = 1, limit = 10 } = req.query;
                 const query = {
                     $or: [{ claimantId: userId }, { respondentId: userId }],
@@ -146,10 +148,11 @@ class DisputeController {
      */
     static resolveDispute(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { disputeId } = req.params;
                 const { resolution, compensationAmount } = req.body;
-                const adminId = req.userId;
+                const adminId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id; // Fix: use req.user.id
                 // Verify admin role
                 const admin = yield User_1.User.findById(adminId);
                 if (!admin || admin.role !== "ADMIN") {
@@ -175,9 +178,17 @@ class DisputeController {
                 if (compensationAmount && compensationAmount > 0) {
                     const recipient = yield User_1.User.findById(dispute.claimantId);
                     if (recipient) {
+                        const oldBalance = recipient.wallet.balance;
                         recipient.wallet.balance += compensationAmount;
                         yield recipient.save();
+                        console.log(`[DISPUTE REFUND] User ${recipient._id} balance: ${oldBalance} -> ${recipient.wallet.balance} (+${compensationAmount})`);
                     }
+                    else {
+                        console.error(`[DISPUTE REFUND ERROR] Recipient not found: ${dispute.claimantId}`);
+                    }
+                }
+                else {
+                    console.log(`[DISPUTE REFUND] No compensation amount specified: ${compensationAmount}`);
                 }
                 res.status(200).json({
                     success: true,
@@ -198,9 +209,10 @@ class DisputeController {
      */
     static reviewDispute(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { disputeId } = req.params;
-                const adminId = req.userId;
+                const adminId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id; // Fix: use req.user.id
                 // Verify admin role
                 const admin = yield User_1.User.findById(adminId);
                 if (!admin || admin.role !== "ADMIN") {
@@ -229,9 +241,10 @@ class DisputeController {
      */
     static closeDispute(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { disputeId } = req.params;
-                const adminId = req.userId;
+                const adminId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id; // Fix: use req.user.id
                 // Verify admin role
                 const admin = yield User_1.User.findById(adminId);
                 if (!admin || admin.role !== "ADMIN") {
@@ -260,10 +273,11 @@ class DisputeController {
      */
     static addEvidence(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { disputeId } = req.params;
                 const { evidence } = req.body;
-                const userId = req.userId;
+                const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id; // Fix: use req.user.id
                 const dispute = yield Dispute_1.Dispute.findById(disputeId);
                 if (!dispute) {
                     return res.status(404).json({ success: false, message: "Dispute not found" });

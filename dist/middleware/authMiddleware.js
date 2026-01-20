@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireRole = exports.authorize = exports.protect = void 0;
+exports.optionalAuth = exports.requireRole = exports.authorize = exports.protect = void 0;
 const User_1 = require("../models/User");
 const TokenService_1 = require("../services/TokenService");
 // 1. Verify Token Middleware
@@ -68,4 +68,31 @@ const authorize = (...roles) => {
 exports.authorize = authorize;
 // Alias for authorize (used in some routes)
 exports.requireRole = exports.authorize;
+// 3. Optional Auth Middleware (parse token if present, but don't require it)
+const optionalAuth = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    let token;
+    if (req.headers.authorization &&
+        req.headers.authorization.startsWith("Bearer")) {
+        try {
+            token = req.headers.authorization.split(" ")[1];
+            // Use TokenService for verification
+            const decoded = TokenService_1.TokenService.verifyAccessToken(token);
+            // Check if user exists in DB
+            const user = yield User_1.User.findById(decoded.id).select("-passwordHash");
+            if (user) {
+                req.user = {
+                    id: user._id.toString(),
+                    role: user.role,
+                };
+            }
+        }
+        catch (error) {
+            // Token invalid, but we don't fail - just continue without user
+            console.log("Optional auth: Invalid token, continuing without user");
+        }
+    }
+    // Always continue, even if no token or invalid token
+    next();
+});
+exports.optionalAuth = optionalAuth;
 //# sourceMappingURL=authMiddleware.js.map
