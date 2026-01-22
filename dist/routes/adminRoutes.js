@@ -4,6 +4,7 @@ exports.adminRoutes = void 0;
 const express_1 = require("express");
 const AdminController_1 = require("../controllers/AdminController");
 const CategoryController_1 = require("../controllers/CategoryController");
+const BrandController_1 = require("../controllers/BrandController");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const User_1 = require("../models/User");
 exports.adminRoutes = (0, express_1.Router)();
@@ -309,7 +310,7 @@ exports.adminRoutes.delete("/categories/:id", CategoryController_1.CategoryContr
  *     security:
  *       - bearerAuth: []
  */
-exports.adminRoutes.get("/brands", CategoryController_1.BrandController.getAll);
+exports.adminRoutes.get("/brands", BrandController_1.BrandController.getAll);
 /**
  * @swagger
  * /api/admin/brands:
@@ -319,7 +320,7 @@ exports.adminRoutes.get("/brands", CategoryController_1.BrandController.getAll);
  *     security:
  *       - bearerAuth: []
  */
-exports.adminRoutes.post("/brands", CategoryController_1.BrandController.create);
+exports.adminRoutes.post("/brands", BrandController_1.BrandController.create);
 /**
  * @swagger
  * /api/admin/brands/{id}:
@@ -329,7 +330,7 @@ exports.adminRoutes.post("/brands", CategoryController_1.BrandController.create)
  *     security:
  *       - bearerAuth: []
  */
-exports.adminRoutes.put("/brands/:id", CategoryController_1.BrandController.update);
+exports.adminRoutes.put("/brands/:id", BrandController_1.BrandController.update);
 /**
  * @swagger
  * /api/admin/brands/{id}:
@@ -339,7 +340,7 @@ exports.adminRoutes.put("/brands/:id", CategoryController_1.BrandController.upda
  *     security:
  *       - bearerAuth: []
  */
-exports.adminRoutes.delete("/brands/:id", CategoryController_1.BrandController.delete);
+exports.adminRoutes.delete("/brands/:id", BrandController_1.BrandController.delete);
 /**
  * @swagger
  * /api/admin/orders/{id}/payout:

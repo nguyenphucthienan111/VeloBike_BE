@@ -1,12 +1,14 @@
 import { Request, Response } from "express";
 import { Category } from "../models/Category";
-import { Brand } from "../models/Brand";
 
 export class CategoryController {
-  // GET /api/admin/categories
+  /**
+   * Get all categories
+   * GET /api/categories
+   */
   static async getAll(req: Request, res: Response) {
     try {
-      const { isActive, page = 1, limit = 20 } = req.query;
+      const { isActive, page = 1, limit = 50 } = req.query;
 
       const query: any = {};
       if (isActive !== undefined) {
@@ -20,7 +22,7 @@ export class CategoryController {
 
       const total = await Category.countDocuments(query);
 
-      res.status(200).json({
+      res.json({
         success: true,
         data: categories,
         pagination: {
@@ -31,36 +33,68 @@ export class CategoryController {
         },
       });
     } catch (error: any) {
-      res.status(500).json({ success: false, message: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Error fetching categories",
+        error: error.message,
+      });
     }
   }
 
-  // POST /api/admin/categories
-  static async create(req: Request, res: Response) {
+  /**
+   * Get category by ID
+   * GET /api/categories/:id
+   */
+  static async getById(req: Request, res: Response) {
     try {
-      const { name, description, icon, isActive = true } = req.body;
+      const { id } = req.params;
 
-      if (!name) {
-        return res.status(400).json({
+      const category = await Category.findById(id);
+      if (!category) {
+        return res.status(404).json({
           success: false,
-          message: "Category name is required",
+          message: "Category not found",
         });
       }
 
-      // Generate slug from name
-      const slug = name
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "");
+      res.json({
+        success: true,
+        data: category,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: "Error fetching category",
+        error: error.message,
+      });
+    }
+  }
 
-      // Check if slug already exists
-      const existing = await Category.findOne({ slug });
-      if (existing) {
+  /**
+   * Create new category (Admin only)
+   * POST /api/categories
+   */
+  static async create(req: Request, res: Response) {
+    try {
+      const { name, slug, description, icon, specsTemplate, isActive } = req.body;
+
+      // Validate required fields
+      if (!name || !slug) {
         return res.status(400).json({
           success: false,
-          message: "Category with this name already exists",
+          message: "Name and slug are required",
+        });
+      }
+
+      // Check if category already exists
+      const existingCategory = await Category.findOne({
+        $or: [{ name }, { slug }],
+      });
+
+      if (existingCategory) {
+        return res.status(400).json({
+          success: false,
+          message: "Category with this name or slug already exists",
         });
       }
 
@@ -69,56 +103,36 @@ export class CategoryController {
         slug,
         description,
         icon,
-        isActive,
+        specsTemplate: specsTemplate || [],
+        isActive: isActive !== undefined ? isActive : true,
       });
 
       await category.save();
 
       res.status(201).json({
         success: true,
+        message: "Category created successfully",
         data: category,
       });
     } catch (error: any) {
-      res.status(400).json({ success: false, message: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Error creating category",
+        error: error.message,
+      });
     }
   }
 
-  // PUT /api/admin/categories/:id
+  /**
+   * Update category (Admin only)
+   * PUT /api/categories/:id
+   */
   static async update(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { name, description, icon, isActive } = req.body;
+      const { name, slug, description, icon, specsTemplate, isActive } = req.body;
 
-      const updateData: any = {};
-      if (name !== undefined) updateData.name = name;
-      if (description !== undefined) updateData.description = description;
-      if (icon !== undefined) updateData.icon = icon;
-      if (isActive !== undefined) updateData.isActive = isActive;
-
-      // If name changed, regenerate slug
-      if (name) {
-        const slug = name
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/(^-|-$)/g, "");
-
-        // Check if new slug conflicts
-        const existing = await Category.findOne({ slug, _id: { $ne: id } });
-        if (existing) {
-          return res.status(400).json({
-            success: false,
-            message: "Category with this name already exists",
-          });
-        }
-        updateData.slug = slug;
-      }
-
-      const category = await Category.findByIdAndUpdate(id, updateData, {
-        new: true,
-      });
-
+      const category = await Category.findById(id);
       if (!category) {
         return res.status(404).json({
           success: false,
@@ -126,22 +140,57 @@ export class CategoryController {
         });
       }
 
-      res.status(200).json({
+      // Check if new name/slug conflicts with existing category
+      if (name || slug) {
+        const existingCategory = await Category.findOne({
+          _id: { $ne: id },
+          $or: [
+            ...(name ? [{ name }] : []),
+            ...(slug ? [{ slug }] : []),
+          ],
+        });
+
+        if (existingCategory) {
+          return res.status(400).json({
+            success: false,
+            message: "Category with this name or slug already exists",
+          });
+        }
+      }
+
+      // Update fields
+      if (name) category.name = name;
+      if (slug) category.slug = slug;
+      if (description !== undefined) category.description = description;
+      if (icon !== undefined) category.icon = icon;
+      if (specsTemplate !== undefined) category.specsTemplate = specsTemplate;
+      if (isActive !== undefined) category.isActive = isActive;
+
+      await category.save();
+
+      res.json({
         success: true,
+        message: "Category updated successfully",
         data: category,
       });
     } catch (error: any) {
-      res.status(400).json({ success: false, message: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Error updating category",
+        error: error.message,
+      });
     }
   }
 
-  // DELETE /api/admin/categories/:id
+  /**
+   * Delete category (Admin only)
+   * DELETE /api/categories/:id
+   */
   static async delete(req: Request, res: Response) {
     try {
       const { id } = req.params;
 
-      const category = await Category.findByIdAndDelete(id);
-
+      const category = await Category.findById(id);
       if (!category) {
         return res.status(404).json({
           success: false,
@@ -149,174 +198,62 @@ export class CategoryController {
         });
       }
 
-      res.status(200).json({
-        success: true,
-        message: "Category deleted",
-      });
-    } catch (error: any) {
-      res.status(500).json({ success: false, message: error.message });
-    }
-  }
-}
+      // Check if category is used in any listings
+      const { Listing } = require("../models/Listing");
+      const listingCount = await Listing.countDocuments({ categoryId: id });
 
-export class BrandController {
-  // GET /api/admin/brands
-  static async getAll(req: Request, res: Response) {
-    try {
-      const { isActive, page = 1, limit = 20 } = req.query;
-
-      const query: any = {};
-      if (isActive !== undefined) {
-        query.isActive = isActive === "true";
-      }
-
-      const brands = await Brand.find(query)
-        .sort({ name: 1 })
-        .skip((Number(page) - 1) * Number(limit))
-        .limit(Number(limit));
-
-      const total = await Brand.countDocuments(query);
-
-      res.status(200).json({
-        success: true,
-        data: brands,
-        pagination: {
-          total,
-          page: Number(page),
-          limit: Number(limit),
-          pages: Math.ceil(total / Number(limit)),
-        },
-      });
-    } catch (error: any) {
-      res.status(500).json({ success: false, message: error.message });
-    }
-  }
-
-  // POST /api/admin/brands
-  static async create(req: Request, res: Response) {
-    try {
-      const { name, description, logo, country, website, isActive = true } = req.body;
-
-      if (!name) {
+      if (listingCount > 0) {
         return res.status(400).json({
           success: false,
-          message: "Brand name is required",
+          message: `Cannot delete category. It is used in ${listingCount} listing(s). Consider deactivating instead.`,
         });
       }
 
-      // Generate slug from name
-      const slug = name
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "");
+      await Category.findByIdAndDelete(id);
 
-      // Check if slug already exists
-      const existing = await Brand.findOne({ slug });
-      if (existing) {
-        return res.status(400).json({
-          success: false,
-          message: "Brand with this name already exists",
-        });
-      }
-
-      const brand = new Brand({
-        name,
-        slug,
-        description,
-        logo,
-        country,
-        website,
-        isActive,
-      });
-
-      await brand.save();
-
-      res.status(201).json({
+      res.json({
         success: true,
-        data: brand,
+        message: "Category deleted successfully",
       });
     } catch (error: any) {
-      res.status(400).json({ success: false, message: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Error deleting category",
+        error: error.message,
+      });
     }
   }
 
-  // PUT /api/admin/brands/:id
-  static async update(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-      const { name, description, logo, country, website, isActive } = req.body;
-
-      const updateData: any = {};
-      if (name !== undefined) updateData.name = name;
-      if (description !== undefined) updateData.description = description;
-      if (logo !== undefined) updateData.logo = logo;
-      if (country !== undefined) updateData.country = country;
-      if (website !== undefined) updateData.website = website;
-      if (isActive !== undefined) updateData.isActive = isActive;
-
-      // If name changed, regenerate slug
-      if (name) {
-        const slug = name
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/(^-|-$)/g, "");
-
-        // Check if new slug conflicts
-        const existing = await Brand.findOne({ slug, _id: { $ne: id } });
-        if (existing) {
-          return res.status(400).json({
-            success: false,
-            message: "Brand with this name already exists",
-          });
-        }
-        updateData.slug = slug;
-      }
-
-      const brand = await Brand.findByIdAndUpdate(id, updateData, {
-        new: true,
-      });
-
-      if (!brand) {
-        return res.status(404).json({
-          success: false,
-          message: "Brand not found",
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        data: brand,
-      });
-    } catch (error: any) {
-      res.status(400).json({ success: false, message: error.message });
-    }
-  }
-
-  // DELETE /api/admin/brands/:id
-  static async delete(req: Request, res: Response) {
+  /**
+   * Toggle category active status (Admin only)
+   * PUT /api/categories/:id/toggle-active
+   */
+  static async toggleActive(req: Request, res: Response) {
     try {
       const { id } = req.params;
 
-      const brand = await Brand.findByIdAndDelete(id);
-
-      if (!brand) {
+      const category = await Category.findById(id);
+      if (!category) {
         return res.status(404).json({
           success: false,
-          message: "Brand not found",
+          message: "Category not found",
         });
       }
 
-      res.status(200).json({
+      category.isActive = !category.isActive;
+      await category.save();
+
+      res.json({
         success: true,
-        message: "Brand deleted",
+        message: `Category ${category.isActive ? "activated" : "deactivated"} successfully`,
+        data: category,
       });
     } catch (error: any) {
-      res.status(500).json({ success: false, message: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Error toggling category status",
+        error: error.message,
+      });
     }
   }
 }
-

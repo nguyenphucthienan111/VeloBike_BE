@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { AdminController } from "../controllers/AdminController";
-import { CategoryController, BrandController } from "../controllers/CategoryController";
+import { CategoryController } from "../controllers/CategoryController";
+import { BrandController } from "../controllers/BrandController";
 import { protect, authorize } from "../middleware/authMiddleware";
 import { UserRole } from "../models/User";
 

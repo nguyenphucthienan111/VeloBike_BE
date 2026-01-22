@@ -60,6 +60,8 @@ const debugRoutes_1 = require("./routes/debugRoutes");
 const walletRoutes_1 = require("./routes/walletRoutes");
 const walletRoutes_2 = require("./routes/walletRoutes");
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
+const categoryRoutes_1 = require("./routes/categoryRoutes");
+const brandRoutes_1 = require("./routes/brandRoutes");
 // Import Subscription Service for initialization
 const SubscriptionService_1 = require("./services/SubscriptionService");
 // Initialize App & Socket.io
@@ -277,6 +279,8 @@ app.use("/api/analytics", analyticsRoutes_1.analyticsRoutes);
 app.use("/api/debug", debugRoutes_1.debugRoutes);
 app.use("/api/wallet", walletRoutes_1.walletRoutes);
 app.use("/api/admin/withdrawals", walletRoutes_2.adminWithdrawalRoutes);
+app.use("/api/categories", categoryRoutes_1.categoryRoutes);
+app.use("/api/brands", brandRoutes_1.brandRoutes);
 // Health Check Endpoint
 app.get("/health", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const cacheStats = yield CacheService_1.CacheService.getStats();

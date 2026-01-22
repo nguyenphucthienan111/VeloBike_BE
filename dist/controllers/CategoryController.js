@@ -9,15 +9,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BrandController = exports.CategoryController = void 0;
+exports.CategoryController = void 0;
 const Category_1 = require("../models/Category");
-const Brand_1 = require("../models/Brand");
 class CategoryController {
-    // GET /api/admin/categories
+    /**
+     * Get all categories
+     * GET /api/categories
+     */
     static getAll(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const { isActive, page = 1, limit = 20 } = req.query;
+                const { isActive, page = 1, limit = 50 } = req.query;
                 const query = {};
                 if (isActive !== undefined) {
                     query.isActive = isActive === "true";
@@ -27,7 +29,7 @@ class CategoryController {
                     .skip((Number(page) - 1) * Number(limit))
                     .limit(Number(limit));
                 const total = yield Category_1.Category.countDocuments(query);
-                res.status(200).json({
+                res.json({
                     success: true,
                     data: categories,
                     pagination: {
@@ -39,34 +41,66 @@ class CategoryController {
                 });
             }
             catch (error) {
-                res.status(500).json({ success: false, message: error.message });
+                res.status(500).json({
+                    success: false,
+                    message: "Error fetching categories",
+                    error: error.message,
+                });
             }
         });
     }
-    // POST /api/admin/categories
+    /**
+     * Get category by ID
+     * GET /api/categories/:id
+     */
+    static getById(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { id } = req.params;
+                const category = yield Category_1.Category.findById(id);
+                if (!category) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Category not found",
+                    });
+                }
+                res.json({
+                    success: true,
+                    data: category,
+                });
+            }
+            catch (error) {
+                res.status(500).json({
+                    success: false,
+                    message: "Error fetching category",
+                    error: error.message,
+                });
+            }
+        });
+    }
+    /**
+     * Create new category (Admin only)
+     * POST /api/categories
+     */
     static create(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const { name, description, icon, isActive = true } = req.body;
-                if (!name) {
+                const { name, slug, description, icon, specsTemplate, isActive } = req.body;
+                // Validate required fields
+                if (!name || !slug) {
                     return res.status(400).json({
                         success: false,
-                        message: "Category name is required",
+                        message: "Name and slug are required",
                     });
                 }
-                // Generate slug from name
-                const slug = name
-                    .toLowerCase()
-                    .normalize("NFD")
-                    .replace(/[\u0300-\u036f]/g, "")
-                    .replace(/[^a-z0-9]+/g, "-")
-                    .replace(/(^-|-$)/g, "");
-                // Check if slug already exists
-                const existing = yield Category_1.Category.findOne({ slug });
-                if (existing) {
+                // Check if category already exists
+                const existingCategory = yield Category_1.Category.findOne({
+                    $or: [{ name }, { slug }],
+                });
+                if (existingCategory) {
                     return res.status(400).json({
                         success: false,
-                        message: "Category with this name already exists",
+                        message: "Category with this name or slug already exists",
                     });
                 }
                 const category = new Category_1.Category({
@@ -74,250 +108,157 @@ class CategoryController {
                     slug,
                     description,
                     icon,
-                    isActive,
+                    specsTemplate: specsTemplate || [],
+                    isActive: isActive !== undefined ? isActive : true,
                 });
                 yield category.save();
                 res.status(201).json({
                     success: true,
+                    message: "Category created successfully",
                     data: category,
                 });
             }
             catch (error) {
-                res.status(400).json({ success: false, message: error.message });
+                res.status(500).json({
+                    success: false,
+                    message: "Error creating category",
+                    error: error.message,
+                });
             }
         });
     }
-    // PUT /api/admin/categories/:id
+    /**
+     * Update category (Admin only)
+     * PUT /api/categories/:id
+     */
     static update(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { id } = req.params;
-                const { name, description, icon, isActive } = req.body;
-                const updateData = {};
-                if (name !== undefined)
-                    updateData.name = name;
-                if (description !== undefined)
-                    updateData.description = description;
-                if (icon !== undefined)
-                    updateData.icon = icon;
-                if (isActive !== undefined)
-                    updateData.isActive = isActive;
-                // If name changed, regenerate slug
-                if (name) {
-                    const slug = name
-                        .toLowerCase()
-                        .normalize("NFD")
-                        .replace(/[\u0300-\u036f]/g, "")
-                        .replace(/[^a-z0-9]+/g, "-")
-                        .replace(/(^-|-$)/g, "");
-                    // Check if new slug conflicts
-                    const existing = yield Category_1.Category.findOne({ slug, _id: { $ne: id } });
-                    if (existing) {
-                        return res.status(400).json({
-                            success: false,
-                            message: "Category with this name already exists",
-                        });
-                    }
-                    updateData.slug = slug;
-                }
-                const category = yield Category_1.Category.findByIdAndUpdate(id, updateData, {
-                    new: true,
-                });
+                const { name, slug, description, icon, specsTemplate, isActive } = req.body;
+                const category = yield Category_1.Category.findById(id);
                 if (!category) {
                     return res.status(404).json({
                         success: false,
                         message: "Category not found",
                     });
                 }
-                res.status(200).json({
+                // Check if new name/slug conflicts with existing category
+                if (name || slug) {
+                    const existingCategory = yield Category_1.Category.findOne({
+                        _id: { $ne: id },
+                        $or: [
+                            ...(name ? [{ name }] : []),
+                            ...(slug ? [{ slug }] : []),
+                        ],
+                    });
+                    if (existingCategory) {
+                        return res.status(400).json({
+                            success: false,
+                            message: "Category with this name or slug already exists",
+                        });
+                    }
+                }
+                // Update fields
+                if (name)
+                    category.name = name;
+                if (slug)
+                    category.slug = slug;
+                if (description !== undefined)
+                    category.description = description;
+                if (icon !== undefined)
+                    category.icon = icon;
+                if (specsTemplate !== undefined)
+                    category.specsTemplate = specsTemplate;
+                if (isActive !== undefined)
+                    category.isActive = isActive;
+                yield category.save();
+                res.json({
                     success: true,
+                    message: "Category updated successfully",
                     data: category,
                 });
             }
             catch (error) {
-                res.status(400).json({ success: false, message: error.message });
+                res.status(500).json({
+                    success: false,
+                    message: "Error updating category",
+                    error: error.message,
+                });
             }
         });
     }
-    // DELETE /api/admin/categories/:id
+    /**
+     * Delete category (Admin only)
+     * DELETE /api/categories/:id
+     */
     static delete(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { id } = req.params;
-                const category = yield Category_1.Category.findByIdAndDelete(id);
+                const category = yield Category_1.Category.findById(id);
                 if (!category) {
                     return res.status(404).json({
                         success: false,
                         message: "Category not found",
                     });
                 }
-                res.status(200).json({
+                // Check if category is used in any listings
+                const { Listing } = require("../models/Listing");
+                const listingCount = yield Listing.countDocuments({ categoryId: id });
+                if (listingCount > 0) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Cannot delete category. It is used in ${listingCount} listing(s). Consider deactivating instead.`,
+                    });
+                }
+                yield Category_1.Category.findByIdAndDelete(id);
+                res.json({
                     success: true,
-                    message: "Category deleted",
+                    message: "Category deleted successfully",
                 });
             }
             catch (error) {
-                res.status(500).json({ success: false, message: error.message });
+                res.status(500).json({
+                    success: false,
+                    message: "Error deleting category",
+                    error: error.message,
+                });
+            }
+        });
+    }
+    /**
+     * Toggle category active status (Admin only)
+     * PUT /api/categories/:id/toggle-active
+     */
+    static toggleActive(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { id } = req.params;
+                const category = yield Category_1.Category.findById(id);
+                if (!category) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Category not found",
+                    });
+                }
+                category.isActive = !category.isActive;
+                yield category.save();
+                res.json({
+                    success: true,
+                    message: `Category ${category.isActive ? "activated" : "deactivated"} successfully`,
+                    data: category,
+                });
+            }
+            catch (error) {
+                res.status(500).json({
+                    success: false,
+                    message: "Error toggling category status",
+                    error: error.message,
+                });
             }
         });
     }
 }
 exports.CategoryController = CategoryController;
-class BrandController {
-    // GET /api/admin/brands
-    static getAll(req, res) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                const { isActive, page = 1, limit = 20 } = req.query;
-                const query = {};
-                if (isActive !== undefined) {
-                    query.isActive = isActive === "true";
-                }
-                const brands = yield Brand_1.Brand.find(query)
-                    .sort({ name: 1 })
-                    .skip((Number(page) - 1) * Number(limit))
-                    .limit(Number(limit));
-                const total = yield Brand_1.Brand.countDocuments(query);
-                res.status(200).json({
-                    success: true,
-                    data: brands,
-                    pagination: {
-                        total,
-                        page: Number(page),
-                        limit: Number(limit),
-                        pages: Math.ceil(total / Number(limit)),
-                    },
-                });
-            }
-            catch (error) {
-                res.status(500).json({ success: false, message: error.message });
-            }
-        });
-    }
-    // POST /api/admin/brands
-    static create(req, res) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                const { name, description, logo, country, website, isActive = true } = req.body;
-                if (!name) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Brand name is required",
-                    });
-                }
-                // Generate slug from name
-                const slug = name
-                    .toLowerCase()
-                    .normalize("NFD")
-                    .replace(/[\u0300-\u036f]/g, "")
-                    .replace(/[^a-z0-9]+/g, "-")
-                    .replace(/(^-|-$)/g, "");
-                // Check if slug already exists
-                const existing = yield Brand_1.Brand.findOne({ slug });
-                if (existing) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "Brand with this name already exists",
-                    });
-                }
-                const brand = new Brand_1.Brand({
-                    name,
-                    slug,
-                    description,
-                    logo,
-                    country,
-                    website,
-                    isActive,
-                });
-                yield brand.save();
-                res.status(201).json({
-                    success: true,
-                    data: brand,
-                });
-            }
-            catch (error) {
-                res.status(400).json({ success: false, message: error.message });
-            }
-        });
-    }
-    // PUT /api/admin/brands/:id
-    static update(req, res) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                const { id } = req.params;
-                const { name, description, logo, country, website, isActive } = req.body;
-                const updateData = {};
-                if (name !== undefined)
-                    updateData.name = name;
-                if (description !== undefined)
-                    updateData.description = description;
-                if (logo !== undefined)
-                    updateData.logo = logo;
-                if (country !== undefined)
-                    updateData.country = country;
-                if (website !== undefined)
-                    updateData.website = website;
-                if (isActive !== undefined)
-                    updateData.isActive = isActive;
-                // If name changed, regenerate slug
-                if (name) {
-                    const slug = name
-                        .toLowerCase()
-                        .normalize("NFD")
-                        .replace(/[\u0300-\u036f]/g, "")
-                        .replace(/[^a-z0-9]+/g, "-")
-                        .replace(/(^-|-$)/g, "");
-                    // Check if new slug conflicts
-                    const existing = yield Brand_1.Brand.findOne({ slug, _id: { $ne: id } });
-                    if (existing) {
-                        return res.status(400).json({
-                            success: false,
-                            message: "Brand with this name already exists",
-                        });
-                    }
-                    updateData.slug = slug;
-                }
-                const brand = yield Brand_1.Brand.findByIdAndUpdate(id, updateData, {
-                    new: true,
-                });
-                if (!brand) {
-                    return res.status(404).json({
-                        success: false,
-                        message: "Brand not found",
-                    });
-                }
-                res.status(200).json({
-                    success: true,
-                    data: brand,
-                });
-            }
-            catch (error) {
-                res.status(400).json({ success: false, message: error.message });
-            }
-        });
-    }
-    // DELETE /api/admin/brands/:id
-    static delete(req, res) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                const { id } = req.params;
-                const brand = yield Brand_1.Brand.findByIdAndDelete(id);
-                if (!brand) {
-                    return res.status(404).json({
-                        success: false,
-                        message: "Brand not found",
-                    });
-                }
-                res.status(200).json({
-                    success: true,
-                    message: "Brand deleted",
-                });
-            }
-            catch (error) {
-                res.status(500).json({ success: false, message: error.message });
-            }
-        });
-    }
-}
-exports.BrandController = BrandController;
 //# sourceMappingURL=CategoryController.js.map

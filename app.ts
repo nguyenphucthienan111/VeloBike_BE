@@ -50,6 +50,8 @@ import { debugRoutes } from "./routes/debugRoutes";
 import { walletRoutes } from "./routes/walletRoutes";
 import { adminWithdrawalRoutes } from "./routes/walletRoutes";
 import userRoutes from "./routes/userRoutes";
+import { categoryRoutes } from "./routes/categoryRoutes";
+import { brandRoutes } from "./routes/brandRoutes";
 
 // Import Subscription Service for initialization
 import { SubscriptionService } from "./services/SubscriptionService";
@@ -289,6 +291,8 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/debug", debugRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/admin/withdrawals", adminWithdrawalRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/brands", brandRoutes);
 
 // Health Check Endpoint
 app.get("/health", async (req, res) => {
