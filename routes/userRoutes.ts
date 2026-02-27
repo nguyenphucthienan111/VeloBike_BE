@@ -192,4 +192,66 @@ userRoutes.get("/me/wallet", protect, async (req: any, res: any) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/users/me/upgrade-to-seller:
+ *   post:
+ *     summary: Upgrade account from BUYER to SELLER (requires KYC verification)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully upgraded to SELLER
+ *       400:
+ *         description: KYC not verified or already a SELLER
+ *       404:
+ *         description: User not found
+ */
+userRoutes.post("/me/upgrade-to-seller", protect, async (req: any, res: any) => {
+  try {
+    const userId = req.user?.id;
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Check if already a SELLER
+    if (user.role === "SELLER") {
+      return res.status(400).json({
+        success: false,
+        message: "You are already a SELLER"
+      });
+    }
+
+    // Check if KYC is verified
+    if (user.kycStatus !== "VERIFIED") {
+      return res.status(400).json({
+        success: false,
+        message: "KYC verification required. Please complete KYC verification first at /api/kyc/submit"
+      });
+    }
+
+    // Upgrade to SELLER
+    user.role = "SELLER";
+    await user.save();
+
+    // Create FREE subscription for new seller
+    const { SubscriptionService } = require("../services/SubscriptionService");
+    await SubscriptionService.createFreeSubscription(userId);
+
+    res.json({
+      success: true,
+      message: "Successfully upgraded to SELLER! You can now create listings.",
+      data: {
+        role: user.role,
+        kycStatus: user.kycStatus
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 export default userRoutes;
