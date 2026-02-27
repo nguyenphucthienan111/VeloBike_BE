@@ -237,16 +237,21 @@ userRoutes.post("/me/upgrade-to-seller", protect, async (req: any, res: any) => 
     user.role = "SELLER";
     await user.save();
 
-    // Create FREE subscription for new seller
+    // Create FREE subscription for new seller (only if not exists)
     const { SubscriptionService } = require("../services/SubscriptionService");
-    await SubscriptionService.createFreeSubscription(userId);
+    const existingSubscription = await SubscriptionService.getSellerSubscription(userId);
+    
+    if (!existingSubscription) {
+      await SubscriptionService.createFreeSubscription(userId);
+    }
 
     res.json({
       success: true,
       message: "Successfully upgraded to SELLER! You can now create listings.",
       data: {
         role: user.role,
-        kycStatus: user.kycStatus
+        kycStatus: user.kycStatus,
+        subscription: existingSubscription ? "Already exists" : "Created FREE subscription"
       }
     });
   } catch (err: any) {
