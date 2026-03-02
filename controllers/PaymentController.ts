@@ -10,7 +10,7 @@ export class PaymentController {
   static async createPaymentLink(req: any, res: any) {
     try {
       const { orderId } = req.body;
-      const order = await Order.findById(orderId);
+      const order = await Order.findById(orderId).populate('listingId');
 
       if (!order) return res.status(404).json({ message: "Order not found" });
       if (order.status !== OrderStatus.CREATED)
@@ -18,13 +18,17 @@ export class PaymentController {
           .status(400)
           .json({ message: "Order is not eligible for payment" });
 
-      // Define return and cancel URLs (should be configured in .env or passed from frontend)
+      // Get listing ID for cancel redirect
+      const listingId = (order.listingId as any)?._id || order.listingId;
+
+      // Define return and cancel URLs
+      // Note: PayOS may not support hash URLs, so we redirect to root with params
       const returnUrl =
         process.env.PAYMENT_RETURN_URL ||
         "http://localhost:3000/payment/success";
       const cancelUrl =
         process.env.PAYMENT_CANCEL_URL ||
-        "http://localhost:3000/payment/cancel";
+        `http://localhost:3000/?cancelled=true&listingId=${listingId}`;
 
       // Call Real Payment Service
       const { paymentLink, orderCode } = await PaymentService.createPaymentLink(
