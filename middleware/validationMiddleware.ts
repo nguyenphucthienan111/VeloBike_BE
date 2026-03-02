@@ -58,7 +58,7 @@ export const validationRules = {
       .isLength({ min: 10 })
       .withMessage("Description must be at least 10 characters"),
     body("type")
-      .isIn(["ROAD", "MTB", "GRAVEL", "TRIATHLON"])
+      .isIn(["ROAD", "MTB", "GRAVEL", "TRIATHLON", "E_BIKE"])
       .withMessage("Invalid bike type"),
     body("generalInfo.brand")
       .trim()

@@ -8,9 +8,10 @@ import { SubscriptionService } from "../services/SubscriptionService";
  * Helper function to enrich seller info with subscription badge
  */
 async function enrichSellerWithBadge(listing: any) {
-  if (!listing.sellerId) return listing;
-  
-  const subscription = await SubscriptionService.getSellerSubscription(listing.sellerId._id || listing.sellerId);
+  if (!listing?.sellerId) return listing;
+  const sellerId = listing.sellerId?._id ?? listing.sellerId;
+  if (!sellerId) return listing;
+  const subscription = await SubscriptionService.getSellerSubscription(sellerId);
   if (subscription) {
     const plan = await SubscriptionService.getPlanByType(subscription.planType);
     if (plan && plan.badge) {
@@ -120,12 +121,13 @@ export class ListingController {
       // Enrich with seller badges
       listings = await enrichListingsWithBadges(listings);
 
-      // Get seller subscriptions for priority sorting
+      // Get seller subscriptions for priority sorting (sellerId may be null if user deleted)
       const listingsWithPriority = await Promise.all(
         listings.map(async (listing: any) => {
-          const subscription = await SubscriptionService.getSellerSubscription(
-            listing.sellerId._id || listing.sellerId
-          );
+          const sellerId = listing.sellerId?._id ?? listing.sellerId ?? null;
+          const subscription = sellerId
+            ? await SubscriptionService.getSellerSubscription(sellerId)
+            : null;
           if (subscription) {
             const plan = await SubscriptionService.getPlanByType(subscription.planType);
             listing.priorityLevel = plan?.priorityLevel || 0;
