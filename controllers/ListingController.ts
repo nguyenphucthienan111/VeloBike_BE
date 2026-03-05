@@ -14,12 +14,17 @@ async function enrichSellerWithBadge(listing: any) {
   const subscription = await SubscriptionService.getSellerSubscription(sellerId);
   if (subscription) {
     const plan = await SubscriptionService.getPlanByType(subscription.planType);
-    if (plan && plan.badge) {
-      // Add badge to seller info
+    if (plan) {
+      // Add badge and plan info to seller
       if (typeof listing.sellerId === 'object') {
         listing.sellerId.badge = plan.badge;
         listing.sellerId.planType = subscription.planType;
       }
+      
+      // Add inspection info to listing level for easy access
+      listing.sellerHasFreeInspection = plan.freeInspectionsPerMonth > 0 && 
+                                        subscription.inspectionsUsedThisMonth < plan.freeInspectionsPerMonth;
+      listing.sellerPlanType = subscription.planType;
     }
   }
   return listing;

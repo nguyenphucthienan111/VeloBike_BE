@@ -133,7 +133,28 @@ export class SubscriptionService {
    * Get seller's current subscription
    */
   static async getSellerSubscription(sellerId: string): Promise<ISellerSubscription | null> {
-    return SellerSubscription.findOne({ sellerId });
+    const subscription = await SellerSubscription.findOne({ sellerId });
+    
+    if (!subscription) return null;
+    
+    // Auto-check and expire if needed
+    if (
+      subscription.status === SubscriptionStatus.ACTIVE &&
+      subscription.planType !== PlanType.FREE &&
+      subscription.endDate < new Date()
+    ) {
+      // Subscription expired, downgrade to FREE
+      console.log(`Auto-expiring subscription for seller ${sellerId}`);
+      subscription.planType = PlanType.FREE;
+      subscription.status = SubscriptionStatus.ACTIVE;
+      subscription.endDate = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000); // 100 years
+      subscription.listingsUsedThisMonth = 0;
+      subscription.inspectionsUsedThisMonth = 0;
+      subscription.boostsUsedThisWeek = 0;
+      await subscription.save();
+    }
+    
+    return subscription;
   }
 
   /**
