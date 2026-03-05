@@ -28,18 +28,37 @@ export class BulkController {
         });
       }
 
-      // Update only listings owned by the seller
+      // Check for active orders on these listings
+      const activeOrders = await Order.find({
+        listingId: { $in: listingIds.map(id => new mongoose.Types.ObjectId(id)) },
+        status: { $in: ["CREATED", "ESCROW_LOCKED", "IN_INSPECTION", "INSPECTION_PASSED", "IN_TRANSIT"] }
+      });
+
+      if (activeOrders.length > 0) {
+        const affectedListingIds = activeOrders.map(o => o.listingId.toString());
+        return res.status(400).json({
+          success: false,
+          message: "Không thể cập nhật listing có đơn hàng đang xử lý",
+          data: {
+            affectedListingIds,
+            activeOrderCount: activeOrders.length
+          }
+        });
+      }
+
+      // Update only listings owned by the seller and without active orders
       const result = await Listing.updateMany(
         {
           _id: { $in: listingIds.map(id => new mongoose.Types.ObjectId(id)) },
-          sellerId: new mongoose.Types.ObjectId(sellerId)
+          sellerId: new mongoose.Types.ObjectId(sellerId),
+          status: { $nin: [ListingStatus.SOLD, ListingStatus.RESERVED] }
         },
         { status }
       );
 
       res.json({
         success: true,
-        message: `${result.modifiedCount} listings updated successfully`,
+        message: `${result.modifiedCount} listings đã được cập nhật thành công`,
         data: {
           modifiedCount: result.modifiedCount,
           matchedCount: result.matchedCount
@@ -69,28 +88,34 @@ export class BulkController {
         });
       }
 
-      // Only allow deletion of DRAFT listings or listings without active orders
+      // Check for active orders on these listings
       const activeOrders = await Order.find({
         listingId: { $in: listingIds.map(id => new mongoose.Types.ObjectId(id)) },
-        status: { $in: ["CREATED", "ESCROW_LOCKED", "IN_INSPECTION", "SHIPPING"] }
+        status: { $in: ["CREATED", "ESCROW_LOCKED", "IN_INSPECTION", "INSPECTION_PASSED", "IN_TRANSIT"] }
       });
 
       if (activeOrders.length > 0) {
+        const affectedListingIds = activeOrders.map(o => o.listingId.toString());
         return res.status(400).json({
           success: false,
-          message: "Cannot delete listings with active orders"
+          message: "Không thể xóa listing có đơn hàng đang xử lý",
+          data: {
+            affectedListingIds,
+            activeOrderCount: activeOrders.length
+          }
         });
       }
 
+      // Delete only listings owned by the seller, not sold, and not reserved
       const result = await Listing.deleteMany({
         _id: { $in: listingIds.map(id => new mongoose.Types.ObjectId(id)) },
         sellerId: new mongoose.Types.ObjectId(sellerId),
-        status: { $in: [ListingStatus.DRAFT, ListingStatus.PUBLISHED] }
+        status: { $nin: [ListingStatus.SOLD, ListingStatus.RESERVED] }
       });
 
       res.json({
         success: true,
-        message: `${result.deletedCount} listings deleted successfully`,
+        message: `${result.deletedCount} listings đã được xóa thành công`,
         data: {
           deletedCount: result.deletedCount
         }
@@ -119,6 +144,25 @@ export class BulkController {
         });
       }
 
+      // Check for active orders on these listings
+      const listingIds = updates.map(u => u.listingId);
+      const activeOrders = await Order.find({
+        listingId: { $in: listingIds.map(id => new mongoose.Types.ObjectId(id)) },
+        status: { $in: ["CREATED", "ESCROW_LOCKED", "IN_INSPECTION", "INSPECTION_PASSED", "IN_TRANSIT"] }
+      });
+
+      if (activeOrders.length > 0) {
+        const affectedListingIds = activeOrders.map(o => o.listingId.toString());
+        return res.status(400).json({
+          success: false,
+          message: "Không thể cập nhật giá listing có đơn hàng đang xử lý",
+          data: {
+            affectedListingIds,
+            activeOrderCount: activeOrders.length
+          }
+        });
+      }
+
       let updatedCount = 0;
       const errors: string[] = [];
 
@@ -134,7 +178,8 @@ export class BulkController {
           const result = await Listing.updateOne(
             {
               _id: new mongoose.Types.ObjectId(listingId),
-              sellerId: new mongoose.Types.ObjectId(sellerId)
+              sellerId: new mongoose.Types.ObjectId(sellerId),
+              status: { $nin: [ListingStatus.SOLD, ListingStatus.RESERVED] }
             },
             { 'pricing.amount': newPrice }
           );
@@ -149,7 +194,7 @@ export class BulkController {
 
       res.json({
         success: true,
-        message: `${updatedCount} listings updated successfully`,
+        message: `${updatedCount} listings đã được cập nhật giá thành công`,
         data: {
           updatedCount,
           totalRequested: updates.length,

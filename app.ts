@@ -88,9 +88,10 @@ if (!fs.existsSync(uploadDir)) {
 
 // Security Middleware (Apply early)
 app.use(securityHeaders);
-app.use(requestSizeLimiter("50mb")); // Limit request size
+app.use(requestSizeLimiter("100mb")); // Limit request size
 app.use(cors());
-app.use(express.json() as any);
+app.use(express.json({ limit: '100mb' }) as any);
+app.use(express.urlencoded({ limit: '100mb', extended: true }) as any);
 app.use(sanitizeInput); // Sanitize inputs
 
 // Logging Middleware

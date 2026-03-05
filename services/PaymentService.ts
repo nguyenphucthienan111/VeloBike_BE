@@ -154,6 +154,16 @@ export class PaymentService {
         } as any);
         await order.save();
 
+        // Update listing status to RESERVED
+        const { Listing, ListingStatus } = await import("../models/Listing");
+        const listing = await order.populate("listingId");
+        if (listing && (listing as any).listingId) {
+          await Listing.findByIdAndUpdate((listing as any).listingId._id, {
+            status: ListingStatus.RESERVED,
+          });
+          console.log(`Listing ${(listing as any).listingId._id} status updated to RESERVED`);
+        }
+
         console.log(`Order ${order._id} payment confirmed via PayOS`);
 
         // Auto-trigger inspection if required

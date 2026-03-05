@@ -18,6 +18,7 @@ export enum ListingStatus {
   PENDING_APPROVAL = "PENDING_APPROVAL", // SRS requirement: Admin approval needed
   PUBLISHED = "PUBLISHED",
   REJECTED = "REJECTED", // Admin rejected listing
+  RESERVED = "RESERVED", // Listing has active order (payment locked)
   IN_INSPECTION = "IN_INSPECTION",
   SOLD = "SOLD",
 }

@@ -201,10 +201,20 @@ export class PaymentController {
       } as any);
       await order.save();
 
-      // Auto-trigger inspection if required (same as real webhook)
+      // Update listing status to RESERVED
+      const { Listing, ListingStatus } = await import("../models/Listing");
       const updatedOrder = await Order.findById(orderId).populate("listingId");
       if (updatedOrder) {
         const listing = updatedOrder.listingId as any;
+        if (listing) {
+          // Update listing status to RESERVED
+          await Listing.findByIdAndUpdate(listing._id, {
+            status: ListingStatus.RESERVED,
+          });
+          console.log(`[SIMULATED] Listing ${listing._id} status updated to RESERVED`);
+        }
+
+        // Auto-trigger inspection if required (same as real webhook)
         if (listing && listing.inspectionRequired) {
           // Find available inspector
           const { User } = await import("../models/User");

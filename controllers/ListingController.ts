@@ -318,7 +318,35 @@ export class ListingController {
       if (listing.status === "SOLD") {
         return res
           .status(400)
-          .json({ success: false, message: "Cannot update sold listing" });
+          .json({ success: false, message: "Không thể chỉnh sửa listing đã bán" });
+      }
+
+      // Don't allow updating if listing is reserved (has active order)
+      if (listing.status === "RESERVED") {
+        return res
+          .status(400)
+          .json({ 
+            success: false, 
+            message: "Không thể chỉnh sửa listing đã có người đặt cọc. Vui lòng chờ giao dịch hoàn tất." 
+          });
+      }
+
+      // Additional check: verify no active orders exist for this listing
+      const { Order } = await import("../models/Order");
+      const activeOrder = await Order.findOne({
+        listingId: id,
+        status: { 
+          $in: ["CREATED", "ESCROW_LOCKED", "IN_INSPECTION", "INSPECTION_PASSED", "IN_TRANSIT"] 
+        }
+      });
+
+      if (activeOrder) {
+        return res
+          .status(400)
+          .json({ 
+            success: false, 
+            message: "Không thể chỉnh sửa listing có đơn hàng đang xử lý. Vui lòng chờ giao dịch hoàn tất." 
+          });
       }
 
       // Update listing
@@ -327,7 +355,7 @@ export class ListingController {
         runValidators: true,
       });
 
-      res.json({ success: true, data: updatedListing });
+      res.json({ success: true, data: updatedListing, message: "Listing đã được cập nhật thành công" });
     } catch (error: any) {
       res.status(400).json({ success: false, message: error.message });
     }
@@ -367,12 +395,40 @@ export class ListingController {
       if (listing.status === "SOLD") {
         return res
           .status(400)
-          .json({ success: false, message: "Cannot delete sold listing" });
+          .json({ success: false, message: "Không thể xóa listing đã bán" });
+      }
+
+      // Don't allow deleting if listing is reserved (has active order)
+      if (listing.status === "RESERVED") {
+        return res
+          .status(400)
+          .json({ 
+            success: false, 
+            message: "Không thể xóa listing đã có người đặt cọc. Vui lòng chờ giao dịch hoàn tất." 
+          });
+      }
+
+      // Additional check: verify no active orders exist for this listing
+      const { Order } = await import("../models/Order");
+      const activeOrder = await Order.findOne({
+        listingId: id,
+        status: { 
+          $in: ["CREATED", "ESCROW_LOCKED", "IN_INSPECTION", "INSPECTION_PASSED", "IN_TRANSIT"] 
+        }
+      });
+
+      if (activeOrder) {
+        return res
+          .status(400)
+          .json({ 
+            success: false, 
+            message: "Không thể xóa listing có đơn hàng đang xử lý. Vui lòng chờ giao dịch hoàn tất hoặc hủy đơn hàng." 
+          });
       }
 
       await Listing.findByIdAndDelete(id);
 
-      res.json({ success: true, message: "Listing deleted" });
+      res.json({ success: true, message: "Listing đã được xóa thành công" });
     } catch (error: any) {
       res.status(500).json({ success: false, message: error.message });
     }
