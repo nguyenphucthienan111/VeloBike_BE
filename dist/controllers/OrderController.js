@@ -296,23 +296,20 @@ class OrderController {
                         order.status === Order_1.OrderStatus.INSPECTION_PASSED) {
                         allowedStatuses = [Order_1.OrderStatus.SHIPPING];
                     }
-                }
-                else if (userRole === User_1.UserRole.BUYER &&
-                    order.buyerId.toString() === userId) {
-                    // Buyer can mark as DELIVERED
-                    if (status === Order_1.OrderStatus.DELIVERED &&
-                        order.status === Order_1.OrderStatus.SHIPPING) {
-                        allowedStatuses = [Order_1.OrderStatus.DELIVERED];
-                    }
-                    // Buyer can CANCEL if created
+                    // Seller can CANCEL (Reject) if created
                     if (status === Order_1.OrderStatus.CANCELLED &&
                         order.status === Order_1.OrderStatus.CREATED) {
                         allowedStatuses = [Order_1.OrderStatus.CANCELLED];
                     }
                 }
-                else if (userRole === User_1.UserRole.SELLER &&
-                    order.sellerId.toString() === userId) {
-                    // Seller can CANCEL (Reject) if created
+                else if ((userRole === User_1.UserRole.BUYER || userRole === User_1.UserRole.SELLER) &&
+                    order.buyerId.toString() === userId) {
+                    // Buyer (or Seller acting as buyer) can mark as DELIVERED
+                    if (status === Order_1.OrderStatus.DELIVERED &&
+                        order.status === Order_1.OrderStatus.SHIPPING) {
+                        allowedStatuses = [Order_1.OrderStatus.DELIVERED];
+                    }
+                    // Buyer (or Seller acting as buyer) can CANCEL if created
                     if (status === Order_1.OrderStatus.CANCELLED &&
                         order.status === Order_1.OrderStatus.CREATED) {
                         allowedStatuses = [Order_1.OrderStatus.CANCELLED];

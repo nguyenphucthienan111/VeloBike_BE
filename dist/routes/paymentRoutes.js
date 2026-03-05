@@ -57,7 +57,8 @@ exports.paymentRoutes = (0, express_1.Router)();
  *       500:
  *         description: Lỗi kết nối PayOS
  */
-exports.paymentRoutes.post("/create-link", authMiddleware_1.protect, (0, authMiddleware_1.authorize)(User_1.UserRole.BUYER), PaymentController_1.PaymentController.createPaymentLink);
+exports.paymentRoutes.post("/create-link", authMiddleware_1.protect, (0, authMiddleware_1.authorize)(User_1.UserRole.BUYER, User_1.UserRole.SELLER), // Allow both BUYER and SELLER
+PaymentController_1.PaymentController.createPaymentLink);
 /**
  * @swagger
  * /api/payment/webhook:

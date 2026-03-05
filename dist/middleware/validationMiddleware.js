@@ -57,7 +57,7 @@ exports.validationRules = {
             .isLength({ min: 10 })
             .withMessage("Description must be at least 10 characters"),
         (0, express_validator_1.body)("type")
-            .isIn(["ROAD", "MTB", "GRAVEL", "TRIATHLON"])
+            .isIn(["ROAD", "MTB", "GRAVEL", "TRIATHLON", "E_BIKE"])
             .withMessage("Invalid bike type"),
         (0, express_validator_1.body)("generalInfo.brand")
             .trim()

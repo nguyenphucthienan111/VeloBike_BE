@@ -21,14 +21,16 @@ export class PaymentController {
       // Get listing ID for cancel redirect
       const listingId = (order.listingId as any)?._id || order.listingId;
 
+      // Generate temporary orderCode for URLs (will be replaced by PayOS)
+      const tempOrderCode = Number(String(Date.now()).slice(-6));
+
       // Define return and cancel URLs
-      // Note: PayOS may not support hash URLs, so we redirect to root with params
       const returnUrl =
         process.env.PAYMENT_RETURN_URL ||
-        "http://localhost:3000/payment/success";
+        `http://localhost:3000/#/payment/success?orderCode=${tempOrderCode}`;
       const cancelUrl =
         process.env.PAYMENT_CANCEL_URL ||
-        `http://localhost:3000/?cancelled=true&listingId=${listingId}`;
+        `http://localhost:3000/#/payment/cancel`;
 
       // Call Real Payment Service
       const { paymentLink, orderCode } = await PaymentService.createPaymentLink(

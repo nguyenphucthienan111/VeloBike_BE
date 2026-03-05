@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { User } from "../models/User";
+import { User, UserRole } from "../models/User";
 import { protect } from "../middleware/authMiddleware";
 
 export const userRoutes = Router();
@@ -218,7 +218,7 @@ userRoutes.post("/me/upgrade-to-seller", protect, async (req: any, res: any) => 
     }
 
     // Check if already a SELLER
-    if (user.role === "SELLER") {
+    if (user.role === UserRole.SELLER) {
       return res.status(400).json({
         success: false,
         message: "You are already a SELLER"
@@ -234,7 +234,7 @@ userRoutes.post("/me/upgrade-to-seller", protect, async (req: any, res: any) => 
     }
 
     // Upgrade to SELLER
-    user.role = "SELLER";
+    user.role = UserRole.SELLER;
     await user.save();
 
     // Create FREE subscription for new seller (only if not exists)

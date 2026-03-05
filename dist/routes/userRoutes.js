@@ -208,5 +208,66 @@ exports.userRoutes.get("/me/wallet", authMiddleware_1.protect, (req, res) => __a
         res.status(500).json({ success: false, message: err.message });
     }
 }));
+/**
+ * @swagger
+ * /api/users/me/upgrade-to-seller:
+ *   post:
+ *     summary: Upgrade account from BUYER to SELLER (requires KYC verification)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully upgraded to SELLER
+ *       400:
+ *         description: KYC not verified or already a SELLER
+ *       404:
+ *         description: User not found
+ */
+exports.userRoutes.post("/me/upgrade-to-seller", authMiddleware_1.protect, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        const user = yield User_1.User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        // Check if already a SELLER
+        if (user.role === User_1.UserRole.SELLER) {
+            return res.status(400).json({
+                success: false,
+                message: "You are already a SELLER"
+            });
+        }
+        // Check if KYC is verified
+        if (user.kycStatus !== "VERIFIED") {
+            return res.status(400).json({
+                success: false,
+                message: "KYC verification required. Please complete KYC verification first at /api/kyc/submit"
+            });
+        }
+        // Upgrade to SELLER
+        user.role = User_1.UserRole.SELLER;
+        yield user.save();
+        // Create FREE subscription for new seller (only if not exists)
+        const { SubscriptionService } = require("../services/SubscriptionService");
+        const existingSubscription = yield SubscriptionService.getSellerSubscription(userId);
+        if (!existingSubscription) {
+            yield SubscriptionService.createFreeSubscription(userId);
+        }
+        res.json({
+            success: true,
+            message: "Successfully upgraded to SELLER! You can now create listings.",
+            data: {
+                role: user.role,
+                kycStatus: user.kycStatus,
+                subscription: existingSubscription ? "Already exists" : "Created FREE subscription"
+            }
+        });
+    }
+    catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}));
 exports.default = exports.userRoutes;
 //# sourceMappingURL=userRoutes.js.map

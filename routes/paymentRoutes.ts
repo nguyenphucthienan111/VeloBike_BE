@@ -60,7 +60,7 @@ export const paymentRoutes = Router();
 paymentRoutes.post(
   "/create-link",
   protect,
-  authorize(UserRole.BUYER),
+  authorize(UserRole.BUYER, UserRole.SELLER), // Allow both BUYER and SELLER
   PaymentController.createPaymentLink as any
 );
 

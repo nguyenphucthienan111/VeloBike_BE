@@ -282,18 +282,7 @@ export class OrderController {
         ) {
           allowedStatuses = [OrderStatus.SHIPPING];
         }
-      } else if (
-        userRole === UserRole.BUYER &&
-        order.buyerId.toString() === userId
-      ) {
-        // Buyer can mark as DELIVERED
-        if (
-          status === OrderStatus.DELIVERED &&
-          order.status === OrderStatus.SHIPPING
-        ) {
-          allowedStatuses = [OrderStatus.DELIVERED];
-        }
-        // Buyer can CANCEL if created
+        // Seller can CANCEL (Reject) if created
         if (
           status === OrderStatus.CANCELLED &&
           order.status === OrderStatus.CREATED
@@ -301,10 +290,17 @@ export class OrderController {
           allowedStatuses = [OrderStatus.CANCELLED];
         }
       } else if (
-        userRole === UserRole.SELLER &&
-        order.sellerId.toString() === userId
+        (userRole === UserRole.BUYER || userRole === UserRole.SELLER) &&
+        order.buyerId.toString() === userId
       ) {
-        // Seller can CANCEL (Reject) if created
+        // Buyer (or Seller acting as buyer) can mark as DELIVERED
+        if (
+          status === OrderStatus.DELIVERED &&
+          order.status === OrderStatus.SHIPPING
+        ) {
+          allowedStatuses = [OrderStatus.DELIVERED];
+        }
+        // Buyer (or Seller acting as buyer) can CANCEL if created
         if (
           status === OrderStatus.CANCELLED &&
           order.status === OrderStatus.CREATED

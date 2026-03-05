@@ -52,20 +52,25 @@ class PaymentController {
     // Creates a checkout link (e.g., PayOS, Stripe)
     static createPaymentLink(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             try {
                 const { orderId } = req.body;
-                const order = yield Order_1.Order.findById(orderId);
+                const order = yield Order_1.Order.findById(orderId).populate('listingId');
                 if (!order)
                     return res.status(404).json({ message: "Order not found" });
                 if (order.status !== Order_1.OrderStatus.CREATED)
                     return res
                         .status(400)
                         .json({ message: "Order is not eligible for payment" });
-                // Define return and cancel URLs (should be configured in .env or passed from frontend)
+                // Get listing ID for cancel redirect
+                const listingId = ((_a = order.listingId) === null || _a === void 0 ? void 0 : _a._id) || order.listingId;
+                // Generate temporary orderCode for URLs (will be replaced by PayOS)
+                const tempOrderCode = Number(String(Date.now()).slice(-6));
+                // Define return and cancel URLs
                 const returnUrl = process.env.PAYMENT_RETURN_URL ||
-                    "http://localhost:3000/payment/success";
+                    `http://localhost:3000/#/payment/success?orderCode=${tempOrderCode}`;
                 const cancelUrl = process.env.PAYMENT_CANCEL_URL ||
-                    "http://localhost:3000/payment/cancel";
+                    `http://localhost:3000/#/payment/cancel`;
                 // Call Real Payment Service
                 const { paymentLink, orderCode } = yield PaymentService_1.PaymentService.createPaymentLink(orderId, returnUrl, cancelUrl);
                 res.json({

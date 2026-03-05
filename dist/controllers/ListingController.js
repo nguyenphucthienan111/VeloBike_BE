@@ -17,9 +17,13 @@ const SubscriptionService_1 = require("../services/SubscriptionService");
  */
 function enrichSellerWithBadge(listing) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (!listing.sellerId)
+        var _a, _b;
+        if (!(listing === null || listing === void 0 ? void 0 : listing.sellerId))
             return listing;
-        const subscription = yield SubscriptionService_1.SubscriptionService.getSellerSubscription(listing.sellerId._id || listing.sellerId);
+        const sellerId = (_b = (_a = listing.sellerId) === null || _a === void 0 ? void 0 : _a._id) !== null && _b !== void 0 ? _b : listing.sellerId;
+        if (!sellerId)
+            return listing;
+        const subscription = yield SubscriptionService_1.SubscriptionService.getSellerSubscription(sellerId);
         if (subscription) {
             const plan = yield SubscriptionService_1.SubscriptionService.getPlanByType(subscription.planType);
             if (plan && plan.badge) {
@@ -125,9 +129,13 @@ class ListingController {
                     .lean(); // Use lean for better performance
                 // Enrich with seller badges
                 listings = yield enrichListingsWithBadges(listings);
-                // Get seller subscriptions for priority sorting
+                // Get seller subscriptions for priority sorting (sellerId may be null if user deleted)
                 const listingsWithPriority = yield Promise.all(listings.map((listing) => __awaiter(this, void 0, void 0, function* () {
-                    const subscription = yield SubscriptionService_1.SubscriptionService.getSellerSubscription(listing.sellerId._id || listing.sellerId);
+                    var _a, _b, _c;
+                    const sellerId = (_c = (_b = (_a = listing.sellerId) === null || _a === void 0 ? void 0 : _a._id) !== null && _b !== void 0 ? _b : listing.sellerId) !== null && _c !== void 0 ? _c : null;
+                    const subscription = sellerId
+                        ? yield SubscriptionService_1.SubscriptionService.getSellerSubscription(sellerId)
+                        : null;
                     if (subscription) {
                         const plan = yield SubscriptionService_1.SubscriptionService.getPlanByType(subscription.planType);
                         listing.priorityLevel = (plan === null || plan === void 0 ? void 0 : plan.priorityLevel) || 0;
