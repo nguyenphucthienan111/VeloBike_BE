@@ -366,7 +366,26 @@ export class PaymentService {
       // Check if inspection is required
       const listing = order.listingId as any;
       if (!listing || !listing.inspectionRequired) {
-        console.log(`Order ${orderId} does not require inspection`);
+        console.log(`Order ${orderId} does not require inspection. Auto-passing inspection.`);
+        
+        // Auto-transition to INSPECTION_PASSED
+        await OrderService.transitionStatus(
+          orderId,
+          OrderStatus.INSPECTION_PASSED,
+          "SYSTEM", // System actor
+          undefined,
+          "Inspection not required - Auto passed"
+        );
+        
+        // Notify seller to ship
+        const { NotificationService } = await import("./NotificationService");
+        await NotificationService.sendNotification(
+          order.sellerId.toString(),
+          "Order Ready to Ship",
+          `Order #${order._id} has been paid and is ready for shipping.`,
+          { orderId: order._id.toString(), status: OrderStatus.INSPECTION_PASSED }
+        );
+        
         return;
       }
 

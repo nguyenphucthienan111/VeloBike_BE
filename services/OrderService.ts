@@ -26,6 +26,7 @@ export class OrderService {
     ],
     [OrderStatus.ESCROW_LOCKED]: [
       OrderStatus.IN_INSPECTION,
+      OrderStatus.INSPECTION_PASSED,
       OrderStatus.REFUNDED,
     ],
     [OrderStatus.IN_INSPECTION]: [
