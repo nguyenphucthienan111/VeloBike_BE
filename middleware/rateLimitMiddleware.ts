@@ -1,10 +1,14 @@
 import rateLimit from "express-rate-limit";
 import { Request, Response } from "express";
 
+// Tắt rate limiting (không giới hạn)
+const skipAll = () => true;
+
 // General API rate limiting
 export const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  skip: skipAll,
   message: {
     success: false,
     message: "Too many requests from this IP, please try again later.",
@@ -16,7 +20,8 @@ export const generalLimiter = rateLimit({
 // Strict rate limiting for authentication endpoints
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 login attempts per windowMs
+  max: 5,
+  skip: skipAll,
   message: {
     success: false,
     message: "Too many authentication attempts, please try again later.",
@@ -27,7 +32,8 @@ export const authLimiter = rateLimit({
 // Payment endpoint rate limiting
 export const paymentLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 3, // Limit each IP to 3 payment requests per minute
+  max: 3,
+  skip: skipAll,
   message: {
     success: false,
     message: "Too many payment requests, please wait before trying again.",
@@ -37,7 +43,8 @@ export const paymentLimiter = rateLimit({
 // Upload rate limiting
 export const uploadLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 10, // Limit each IP to 10 uploads per minute
+  max: 10,
+  skip: skipAll,
   message: {
     success: false,
     message: "Too many upload requests, please wait before trying again.",
@@ -47,7 +54,8 @@ export const uploadLimiter = rateLimit({
 // Search rate limiting (more lenient)
 export const searchLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 30, // Limit each IP to 30 searches per minute
+  max: 30,
+  skip: skipAll,
   message: {
     success: false,
     message: "Too many search requests, please slow down.",
@@ -57,7 +65,8 @@ export const searchLimiter = rateLimit({
 // Admin operations rate limiting
 export const adminLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 20, // Limit admin operations
+  max: 20,
+  skip: skipAll,
   message: {
     success: false,
     message: "Too many admin requests, please wait.",
