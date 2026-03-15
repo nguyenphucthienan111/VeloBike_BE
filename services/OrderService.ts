@@ -114,7 +114,7 @@ export class OrderService {
     listingId: string,
     buyerId: string,
     inspectionRequired: boolean = true,
-    inspectionFee: number = 500000
+    inspectionFee: number = 1000
   ): Promise<IOrder> {
     const listing = await Listing.findById(listingId);
     if (!listing) {
@@ -138,7 +138,7 @@ export class OrderService {
       }
     }
     
-    const shippingFee = 150000; // Example: VND
+    const shippingFee = 1000; // Example: VND
     const platformFee = Math.ceil(listing.pricing.amount * commissionRate); // Dynamic based on subscription
 
     const order = new Order({
