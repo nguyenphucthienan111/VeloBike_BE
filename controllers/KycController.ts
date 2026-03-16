@@ -56,10 +56,31 @@ export class KycController {
         });
       }
 
+      // Extract document ID from FPT AI result
+      const documentId = verificationResult.data!.idInfo?.id || 
+                         verificationResult.data!.idInfo?.id_number ||
+                         verificationResult.data!.idInfo?.document_id;
+
+      // Check if this CCCD/CMND is already used by another account
+      if (documentId) {
+        const existingKyc = await User.findOne({
+          'kycData.documentId': documentId,
+          _id: { $ne: userId },
+          kycStatus: KycStatus.VERIFIED,
+        });
+        if (existingKyc) {
+          return res.status(400).json({
+            success: false,
+            message: "This ID document is already linked to another verified account",
+          });
+        }
+      }
+
       // Update user with verification data
       user.kycStatus = KycStatus.VERIFIED;
       user.kycData = {
         ...user.kycData,
+        documentId: documentId || user.kycData?.documentId,
         verifiedAt: new Date(),
         confidence: verificationResult.data!.faceMatch.similarity,
         documentData: verificationResult.data!.idInfo,
