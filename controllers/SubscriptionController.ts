@@ -242,6 +242,48 @@ export class SubscriptionController {
   }
 
   /**
+   * POST /api/subscriptions/verify-payment
+   * Called from FE success page to verify PayOS payment and activate subscription
+   */
+  static async verifyPayment(req: any, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const { orderCode } = req.body;
+      if (!orderCode) {
+        return res.status(400).json({ success: false, message: "orderCode is required" });
+      }
+
+      // Verify payment with PayOS first
+      const { PaymentService } = await import("../services/PaymentService");
+      let payosStatus: string | null = null;
+      try {
+        const info = await PaymentService.getPaymentInfo(Number(orderCode));
+        payosStatus = info?.status || null;
+      } catch (e) {
+        console.warn("Could not fetch PayOS info:", e);
+      }
+
+      if (payosStatus && payosStatus !== "PAID") {
+        return res.status(400).json({ success: false, message: `Payment not completed. Status: ${payosStatus}` });
+      }
+
+      const result = await SubscriptionService.verifyAndActivate(Number(orderCode), userId);
+
+      if (!result.success) {
+        return res.status(400).json({ success: false, message: "Could not activate subscription. Payment may still be processing." });
+      }
+
+      res.json({ success: true, message: `Subscription activated!`, data: { planName: result.planName } });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
    * POST /api/subscriptions/test-payment-success
    * TEST ONLY: Simulate successful payment without actual payment
    */

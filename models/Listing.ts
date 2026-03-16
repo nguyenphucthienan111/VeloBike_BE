@@ -75,9 +75,13 @@ export interface IListing extends MongooseDocument {
   views: number;
   
   // Boost feature
-  boostedUntil?: Date; // Thời gian boost hết hạn
-  boostCount: number; // Số lần đã boost
-  
+  boostedUntil?: Date;
+  boostCount: number;
+
+  // Auto-approval tracking
+  submittedAt?: Date;
+  autoApprovedAt?: Date;
+
   createdAt: Date;
 }
 
@@ -170,6 +174,10 @@ const ListingSchema = new Schema<IListing>(
     // Boost feature
     boostedUntil: { type: Date, index: true }, // Thời gian boost hết hạn
     boostCount: { type: Number, default: 0 }, // Số lần đã boost
+
+    // Auto-approval tracking
+    submittedAt: { type: Date, index: true }, // When seller submitted for approval
+    autoApprovedAt: { type: Date }, // When auto-approved by cron
   },
   {
     timestamps: true,

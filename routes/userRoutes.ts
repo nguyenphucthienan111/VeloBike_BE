@@ -133,7 +133,7 @@ userRoutes.post("/kyc", protect, async (req: any, res: any) => {
  */
 userRoutes.get("/:id", async (req: any, res: any) => {
   try {
-    const user = await User.findById(req.params.id).select("fullName avatar reputation role");
+    const user = await User.findById(req.params.id).select("fullName avatar reputation role phone address");
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
     res.json({ success: true, data: user });
   } catch (err: any) {

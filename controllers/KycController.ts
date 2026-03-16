@@ -50,6 +50,14 @@ export class KycController {
         user.kycStatus = KycStatus.REJECTED;
         await user.save();
 
+        // Notify user of rejection
+        await NotificationService.sendNotification(
+          userId,
+          "KYC Verification Failed",
+          verificationResult.message || "Identity verification failed. Please try again with clearer images.",
+          { kycStatus: KycStatus.REJECTED }
+        );
+
         return res.status(400).json({
           success: false,
           message: verificationResult.message,
@@ -69,6 +77,14 @@ export class KycController {
           kycStatus: KycStatus.VERIFIED,
         });
         if (existingKyc) {
+          user.kycStatus = KycStatus.REJECTED;
+          await user.save();
+          await NotificationService.sendNotification(
+            userId,
+            "KYC Verification Failed",
+            "This ID document is already linked to another verified account. Please contact support if you believe this is an error.",
+            { kycStatus: KycStatus.REJECTED }
+          );
           return res.status(400).json({
             success: false,
             message: "This ID document is already linked to another verified account",

@@ -20,6 +20,7 @@ import { requestLogger, errorLogger, performanceMonitor, apiAnalytics } from "./
 // Import Services
 import { CacheService } from "./services/CacheService";
 import { AlertService } from "./services/AlertService";
+import { AutoApprovalService } from "./services/AutoApprovalService";
 
 // Import Routes
 import { authRoutes } from "./routes/authRoutes";
@@ -74,6 +75,7 @@ if (process.env.NODE_ENV !== 'test') {
   CacheService.init().catch(console.error);
   AlertService.startAlertProcessing();
   SubscriptionService.initializeDefaultPlans().catch(console.error);
+  AutoApprovalService.startCron();
   initFirebase();
 }
 

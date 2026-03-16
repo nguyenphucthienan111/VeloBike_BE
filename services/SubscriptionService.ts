@@ -78,7 +78,7 @@ const DEFAULT_PLANS = [
   {
     name: PlanType.PREMIUM,
     displayName: "Gói Cao Cấp",
-    price: 599000,
+    price: 500000,
     commissionRate: 0.05, // 5%
     maxListingsPerMonth: -1, // Unlimited
     features: [
@@ -559,6 +559,53 @@ export class SubscriptionService {
     } catch (err: any) {
       console.error("PayOS subscription payment link error:", err.message);
       throw new Error(`Payment link creation failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * Verify and activate subscription after payment (called from FE success page)
+   * More reliable than webhook as it directly queries PayOS
+   */
+  static async verifyAndActivate(orderCode: number, userId: string): Promise<{ success: boolean; planName?: string }> {
+    try {
+      // Find subscription with this pending orderCode
+      const subscription = await SellerSubscription.findOne({
+        "pendingPayment.orderCode": orderCode,
+      });
+
+      if (!subscription) {
+        // Maybe already activated via webhook — check current plan
+        const existing = await SellerSubscription.findOne({ sellerId: userId });
+        if (existing && existing.planType !== PlanType.FREE) {
+          const plan = await SubscriptionService.getPlanByType(existing.planType);
+          return { success: true, planName: plan?.displayName };
+        }
+        console.warn(`No pending subscription found for orderCode: ${orderCode}`);
+        return { success: false };
+      }
+
+      const pendingPlanType = subscription.pendingPayment?.planType as PlanType;
+      if (!pendingPlanType) return { success: false };
+
+      // Activate subscription
+      await SubscriptionService.subscribeToPlan(
+        subscription.sellerId.toString(),
+        pendingPlanType,
+        `payos_${orderCode}`
+      );
+
+      // Clear pending payment
+      await SellerSubscription.findOneAndUpdate(
+        { sellerId: subscription.sellerId },
+        { $unset: { pendingPayment: "" } }
+      );
+
+      const plan = await SubscriptionService.getPlanByType(pendingPlanType);
+      console.log(`Subscription activated via verify: userId=${subscription.sellerId}, planType=${pendingPlanType}`);
+      return { success: true, planName: plan?.displayName };
+    } catch (err: any) {
+      console.error("verifyAndActivate error:", err);
+      return { success: false };
     }
   }
 

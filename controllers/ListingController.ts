@@ -275,6 +275,7 @@ export class ListingController {
 
       // Update status to PENDING_APPROVAL per SRS BikeMarket
       listing.status = ListingStatus.PENDING_APPROVAL;
+      (listing as any).submittedAt = new Date();
       await listing.save();
 
       // TODO: Send notification to admin about new listing pending approval

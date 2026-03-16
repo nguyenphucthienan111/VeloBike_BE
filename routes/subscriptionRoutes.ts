@@ -152,6 +152,7 @@ subscriptionRoutes.post("/create-payment-link", protect, SubscriptionController.
  *         description: Subscription successful
  */
 subscriptionRoutes.post("/subscribe", protect, SubscriptionController.subscribe as any);
+subscriptionRoutes.post("/verify-payment", protect, SubscriptionController.verifyPayment as any);
 
 /**
  * @swagger
