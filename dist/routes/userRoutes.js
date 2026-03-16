@@ -8,12 +8,25 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.userRoutes = void 0;
 const express_1 = require("express");
+const multer_1 = __importDefault(require("multer"));
+const cloudinary_1 = require("cloudinary");
 const User_1 = require("../models/User");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 exports.userRoutes = (0, express_1.Router)();
+const upload = (0, multer_1.default)({ dest: "uploads/" });
+const configureCloudinary = () => {
+    cloudinary_1.v2.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+};
 /**
  * @swagger
  * tags:
@@ -264,6 +277,79 @@ exports.userRoutes.post("/me/upgrade-to-seller", authMiddleware_1.protect, (req,
                 subscription: existingSubscription ? "Already exists" : "Created FREE subscription"
             }
         });
+    }
+    catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}));
+/**
+ * @swagger
+ * /api/users/me/avatar:
+ *   put:
+ *     summary: Upload or update user avatar
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Avatar updated successfully
+ */
+exports.userRoutes.put("/me/avatar", authMiddleware_1.protect, upload.single("avatar"), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "No file uploaded" });
+        }
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+        configureCloudinary();
+        const result = yield cloudinary_1.v2.uploader.upload(req.file.path, {
+            folder: "velobike_avatars",
+            transformation: [{ width: 400, height: 400, crop: "fill", gravity: "face" }],
+        });
+        const user = yield User_1.User.findByIdAndUpdate(userId, { avatar: result.secure_url }, { new: true }).select("-passwordHash");
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        res.json({
+            success: true,
+            message: "Avatar updated successfully",
+            data: { avatar: result.secure_url, user },
+        });
+    }
+    catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}));
+/**
+ * @swagger
+ * /api/users/me/fcm-token:
+ *   put:
+ *     summary: Update FCM token for push notifications
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ */
+exports.userRoutes.put("/me/fcm-token", authMiddleware_1.protect, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        const { fcmToken } = req.body;
+        if (!fcmToken)
+            return res.status(400).json({ success: false, message: "fcmToken is required" });
+        yield User_1.User.findByIdAndUpdate(userId, { fcmToken });
+        res.json({ success: true, message: "FCM token updated" });
     }
     catch (err) {
         res.status(500).json({ success: false, message: err.message });

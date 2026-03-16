@@ -75,7 +75,7 @@ const UserSchema = new mongoose_1.Schema({
         default: KycStatus.PENDING,
     },
     kycData: {
-        documentId: String,
+        documentId: { type: String, index: true },
         documentType: String,
         frontImage: String,
         backImage: String,
@@ -110,5 +110,7 @@ const UserSchema = new mongoose_1.Schema({
     resetPasswordToken: String,
     resetPasswordExpire: Date,
 }, { timestamps: true });
+// Prevent same CCCD/CMND from being used across multiple accounts
+UserSchema.index({ 'kycData.documentId': 1 }, { unique: true, sparse: true });
 exports.User = mongoose_1.default.model("User", UserSchema);
 //# sourceMappingURL=User.js.map

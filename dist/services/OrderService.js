@@ -329,6 +329,7 @@ OrderService.VALID_TRANSITIONS = {
     ],
     [Order_1.OrderStatus.ESCROW_LOCKED]: [
         Order_1.OrderStatus.IN_INSPECTION,
+        Order_1.OrderStatus.INSPECTION_PASSED,
         Order_1.OrderStatus.REFUNDED,
     ],
     [Order_1.OrderStatus.IN_INSPECTION]: [

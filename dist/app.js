@@ -64,6 +64,7 @@ const categoryRoutes_1 = require("./routes/categoryRoutes");
 const brandRoutes_1 = require("./routes/brandRoutes");
 // Import Subscription Service for initialization
 const SubscriptionService_1 = require("./services/SubscriptionService");
+const FirebaseService_1 = require("./services/FirebaseService");
 // Initialize App & Socket.io
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
@@ -77,10 +78,9 @@ const PORT = process.env.PORT || 5000;
 // Initialize Cache Service only if not in test environment
 if (process.env.NODE_ENV !== 'test') {
     CacheService_1.CacheService.init().catch(console.error);
-    // Start alert processing
     AlertService_1.AlertService.startAlertProcessing();
-    // Initialize default subscription plans
     SubscriptionService_1.SubscriptionService.initializeDefaultPlans().catch(console.error);
+    (0, FirebaseService_1.initFirebase)();
 }
 // Ensure uploads directory exists (Task B4 Fix)
 const uploadDir = path_1.default.join(__dirname, "uploads");
@@ -90,9 +90,10 @@ if (!fs_1.default.existsSync(uploadDir)) {
 }
 // Security Middleware (Apply early)
 app.use(securityMiddleware_1.securityHeaders);
-app.use((0, securityMiddleware_1.requestSizeLimiter)("50mb")); // Limit request size
+app.use((0, securityMiddleware_1.requestSizeLimiter)("100mb")); // Limit request size
 app.use((0, cors_1.default)());
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: '100mb' }));
+app.use(express_1.default.urlencoded({ limit: '100mb', extended: true }));
 app.use(securityMiddleware_1.sanitizeInput); // Sanitize inputs
 // Logging Middleware
 app.use(requestLoggerMiddleware_1.requestLogger);

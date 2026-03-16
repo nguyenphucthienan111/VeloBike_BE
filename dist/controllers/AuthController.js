@@ -14,14 +14,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const google_auth_library_1 = require("google-auth-library");
 const cloudinary_1 = require("cloudinary");
 const User_1 = require("../models/User");
 const Otp_1 = require("../models/Otp");
 const EmailService_1 = require("../services/EmailService");
 const TokenService_1 = require("../services/TokenService");
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
-const googleClient = new google_auth_library_1.OAuth2Client(GOOGLE_CLIENT_ID);
+const FirebaseService_1 = require("../services/FirebaseService");
 class AuthController {
     // POST /api/auth/register
     // Creates user (email not verified yet) and sends verification OTP to email
@@ -176,29 +174,24 @@ class AuthController {
         });
     }
     // POST /api/auth/google
-    // Verify Google ID token and create/link user
+    // POST /api/auth/google
+    // Verify Firebase ID token (from Google Sign-In via Firebase) and create/link user
     static googleLogin(req, res) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const { googleToken } = req.body;
-                if (!googleToken)
-                    return res
-                        .status(400)
-                        .json({ success: false, message: "googleToken is required" });
-                // Verify token with Google
-                const ticket = yield googleClient.verifyIdToken({
-                    idToken: googleToken,
-                    audience: GOOGLE_CLIENT_ID,
-                });
-                const payload = ticket.getPayload();
-                if (!payload || !payload.email)
-                    return res
-                        .status(400)
-                        .json({ success: false, message: "Invalid Google token" });
-                const email = payload.email;
-                const googleId = payload.sub;
-                const name = payload.name || "Google User";
-                const picture = payload.picture || undefined;
+                const { firebaseToken } = req.body;
+                if (!firebaseToken)
+                    return res.status(400).json({ success: false, message: "firebaseToken is required" });
+                const firebaseAdmin = (0, FirebaseService_1.getFirebaseAdmin)();
+                if (!firebaseAdmin)
+                    return res.status(500).json({ success: false, message: "Firebase not initialized" });
+                const decoded = yield firebaseAdmin.auth().verifyIdToken(firebaseToken);
+                const email = decoded.email;
+                if (!email)
+                    return res.status(400).json({ success: false, message: "No email in token" });
+                const googleId = decoded.uid;
+                const name = decoded.name || "Google User";
+                const picture = decoded.picture || undefined;
                 let user = yield User_1.User.findOne({ email });
                 if (user) {
                     if (!user.googleId) {
@@ -215,7 +208,7 @@ class AuthController {
                         avatar: picture,
                         role: User_1.UserRole.BUYER,
                         kycStatus: User_1.KycStatus.PENDING,
-                        emailVerified: true, // Google verified
+                        emailVerified: true,
                     });
                     yield user.save();
                 }

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -26,12 +59,16 @@ function enrichSellerWithBadge(listing) {
         const subscription = yield SubscriptionService_1.SubscriptionService.getSellerSubscription(sellerId);
         if (subscription) {
             const plan = yield SubscriptionService_1.SubscriptionService.getPlanByType(subscription.planType);
-            if (plan && plan.badge) {
-                // Add badge to seller info
+            if (plan) {
+                // Add badge and plan info to seller
                 if (typeof listing.sellerId === 'object') {
                     listing.sellerId.badge = plan.badge;
                     listing.sellerId.planType = subscription.planType;
                 }
+                // Add inspection info to listing level for easy access
+                listing.sellerHasFreeInspection = plan.freeInspectionsPerMonth > 0 &&
+                    subscription.inspectionsUsedThisMonth < plan.freeInspectionsPerMonth;
+                listing.sellerPlanType = subscription.planType;
             }
         }
         return listing;
@@ -310,14 +347,39 @@ class ListingController {
                 if (listing.status === "SOLD") {
                     return res
                         .status(400)
-                        .json({ success: false, message: "Cannot update sold listing" });
+                        .json({ success: false, message: "Không thể chỉnh sửa listing đã bán" });
+                }
+                // Don't allow updating if listing is reserved (has active order)
+                if (listing.status === "RESERVED") {
+                    return res
+                        .status(400)
+                        .json({
+                        success: false,
+                        message: "Không thể chỉnh sửa listing đã có người đặt cọc. Vui lòng chờ giao dịch hoàn tất."
+                    });
+                }
+                // Additional check: verify no active orders exist for this listing
+                const { Order } = yield Promise.resolve().then(() => __importStar(require("../models/Order")));
+                const activeOrder = yield Order.findOne({
+                    listingId: id,
+                    status: {
+                        $in: ["CREATED", "ESCROW_LOCKED", "IN_INSPECTION", "INSPECTION_PASSED", "IN_TRANSIT"]
+                    }
+                });
+                if (activeOrder) {
+                    return res
+                        .status(400)
+                        .json({
+                        success: false,
+                        message: "Không thể chỉnh sửa listing có đơn hàng đang xử lý. Vui lòng chờ giao dịch hoàn tất."
+                    });
                 }
                 // Update listing
                 const updatedListing = yield Listing_1.Listing.findByIdAndUpdate(id, req.body, {
                     new: true,
                     runValidators: true,
                 });
-                res.json({ success: true, data: updatedListing });
+                res.json({ success: true, data: updatedListing, message: "Listing đã được cập nhật thành công" });
             }
             catch (error) {
                 res.status(400).json({ success: false, message: error.message });
@@ -356,10 +418,35 @@ class ListingController {
                 if (listing.status === "SOLD") {
                     return res
                         .status(400)
-                        .json({ success: false, message: "Cannot delete sold listing" });
+                        .json({ success: false, message: "Không thể xóa listing đã bán" });
+                }
+                // Don't allow deleting if listing is reserved (has active order)
+                if (listing.status === "RESERVED") {
+                    return res
+                        .status(400)
+                        .json({
+                        success: false,
+                        message: "Không thể xóa listing đã có người đặt cọc. Vui lòng chờ giao dịch hoàn tất."
+                    });
+                }
+                // Additional check: verify no active orders exist for this listing
+                const { Order } = yield Promise.resolve().then(() => __importStar(require("../models/Order")));
+                const activeOrder = yield Order.findOne({
+                    listingId: id,
+                    status: {
+                        $in: ["CREATED", "ESCROW_LOCKED", "IN_INSPECTION", "INSPECTION_PASSED", "IN_TRANSIT"]
+                    }
+                });
+                if (activeOrder) {
+                    return res
+                        .status(400)
+                        .json({
+                        success: false,
+                        message: "Không thể xóa listing có đơn hàng đang xử lý. Vui lòng chờ giao dịch hoàn tất hoặc hủy đơn hàng."
+                    });
                 }
                 yield Listing_1.Listing.findByIdAndDelete(id);
-                res.json({ success: true, message: "Listing deleted" });
+                res.json({ success: true, message: "Listing đã được xóa thành công" });
             }
             catch (error) {
                 res.status(500).json({ success: false, message: error.message });

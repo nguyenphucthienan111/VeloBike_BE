@@ -50,6 +50,7 @@ var ListingStatus;
     ListingStatus["PENDING_APPROVAL"] = "PENDING_APPROVAL";
     ListingStatus["PUBLISHED"] = "PUBLISHED";
     ListingStatus["REJECTED"] = "REJECTED";
+    ListingStatus["RESERVED"] = "RESERVED";
     ListingStatus["IN_INSPECTION"] = "IN_INSPECTION";
     ListingStatus["SOLD"] = "SOLD";
 })(ListingStatus || (exports.ListingStatus = ListingStatus = {}));

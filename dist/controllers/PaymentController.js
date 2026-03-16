@@ -218,10 +218,19 @@ class PaymentController {
                     note: "[SIMULATED] Payment confirmed - Escrow locked",
                 });
                 yield order.save();
-                // Auto-trigger inspection if required (same as real webhook)
+                // Update listing status to RESERVED
+                const { Listing, ListingStatus } = yield Promise.resolve().then(() => __importStar(require("../models/Listing")));
                 const updatedOrder = yield Order_1.Order.findById(orderId).populate("listingId");
                 if (updatedOrder) {
                     const listing = updatedOrder.listingId;
+                    if (listing) {
+                        // Update listing status to RESERVED
+                        yield Listing.findByIdAndUpdate(listing._id, {
+                            status: ListingStatus.RESERVED,
+                        });
+                        console.log(`[SIMULATED] Listing ${listing._id} status updated to RESERVED`);
+                    }
+                    // Auto-trigger inspection if required (same as real webhook)
                     if (listing && listing.inspectionRequired) {
                         // Find available inspector
                         const { User } = yield Promise.resolve().then(() => __importStar(require("../models/User")));
