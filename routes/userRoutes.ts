@@ -1,8 +1,20 @@
 import { Router } from "express";
+import multer from "multer";
+import { v2 as cloudinary } from "cloudinary";
 import { User, UserRole } from "../models/User";
 import { protect } from "../middleware/authMiddleware";
 
 export const userRoutes = Router();
+
+const upload = multer({ dest: "uploads/" });
+
+const configureCloudinary = () => {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+};
 
 /**
  * @swagger
@@ -253,6 +265,65 @@ userRoutes.post("/me/upgrade-to-seller", protect, async (req: any, res: any) => 
         kycStatus: user.kycStatus,
         subscription: existingSubscription ? "Already exists" : "Created FREE subscription"
       }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/users/me/avatar:
+ *   put:
+ *     summary: Upload or update user avatar
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Avatar updated successfully
+ */
+userRoutes.put("/me/avatar", protect, upload.single("avatar") as any, async (req: any, res: any) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No file uploaded" });
+    }
+
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    configureCloudinary();
+
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      folder: "velobike_avatars",
+      transformation: [{ width: 400, height: 400, crop: "fill", gravity: "face" }],
+    });
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { avatar: result.secure_url },
+      { new: true }
+    ).select("-passwordHash");
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Avatar updated successfully",
+      data: { avatar: result.secure_url, user },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
