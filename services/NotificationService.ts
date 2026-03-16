@@ -1,6 +1,6 @@
-// import * as admin from 'firebase-admin'; // Uncomment when firebase-admin is installed
 import { User } from "../models/User";
 import { Notification } from "../models/Notification";
+import { getFirebaseAdmin } from "./FirebaseService";
 
 export class NotificationService {
   
@@ -48,24 +48,23 @@ export class NotificationService {
    */
   static async sendPushNotification(fcmToken: string, title: string, body: string, data?: any) {
     try {
+      const admin = getFirebaseAdmin();
+      if (!admin) {
+        console.log('[FCM] Firebase not initialized, skipping push');
+        return false;
+      }
+
       const message = {
-        notification: {
-          title,
-          body,
-        },
-        data: data || {},
+        notification: { title, body },
+        data: data ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {},
         token: fcmToken,
       };
 
-      // Mock sending
-      console.log(`[FCM] Sending push notification:`, message);
-      
-      // Real implementation:
-      // await admin.messaging().send(message);
-      
+      const result = await admin.messaging().send(message);
+      console.log('[FCM] Push sent:', result);
       return true;
-    } catch (error) {
-      console.error("[FCM] Error:", error);
+    } catch (error: any) {
+      console.error("[FCM] Error:", error.message);
       return false;
     }
   }

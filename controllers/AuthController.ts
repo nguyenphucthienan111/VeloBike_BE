@@ -1,14 +1,11 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import { OAuth2Client } from "google-auth-library";
 import { v2 as cloudinary } from "cloudinary";
 import { User, UserRole, KycStatus } from "../models/User";
 import { Otp } from "../models/Otp";
 import { EmailService } from "../services/EmailService";
 import { TokenService } from "../services/TokenService";
-
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
-const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+import { getFirebaseAdmin } from "../services/FirebaseService";
 
 export class AuthController {
   // POST /api/auth/register
@@ -188,31 +185,27 @@ export class AuthController {
   }
 
   // POST /api/auth/google
-  // Verify Google ID token and create/link user
+  // POST /api/auth/google
+  // Verify Firebase ID token (from Google Sign-In via Firebase) and create/link user
   static async googleLogin(req: Request, res: Response) {
     try {
-      const { googleToken } = req.body;
-      if (!googleToken)
-        return res
-          .status(400)
-          .json({ success: false, message: "googleToken is required" });
+      const { firebaseToken } = req.body;
+      if (!firebaseToken)
+        return res.status(400).json({ success: false, message: "firebaseToken is required" });
 
-      // Verify token with Google
-      const ticket = await googleClient.verifyIdToken({
-        idToken: googleToken,
-        audience: GOOGLE_CLIENT_ID,
-      });
-      const payload = ticket.getPayload();
+      const firebaseAdmin = getFirebaseAdmin();
+      if (!firebaseAdmin)
+        return res.status(500).json({ success: false, message: "Firebase not initialized" });
 
-      if (!payload || !payload.email)
-        return res
-          .status(400)
-          .json({ success: false, message: "Invalid Google token" });
+      const decoded = await firebaseAdmin.auth().verifyIdToken(firebaseToken);
 
-      const email = payload.email;
-      const googleId = payload.sub;
-      const name = payload.name || "Google User";
-      const picture = (payload.picture as string) || undefined;
+      const email = decoded.email;
+      if (!email)
+        return res.status(400).json({ success: false, message: "No email in token" });
+
+      const googleId = decoded.uid;
+      const name = decoded.name || "Google User";
+      const picture = decoded.picture || undefined;
 
       let user = await User.findOne({ email });
       if (user) {
@@ -229,14 +222,14 @@ export class AuthController {
           avatar: picture,
           role: UserRole.BUYER,
           kycStatus: KycStatus.PENDING,
-          emailVerified: true, // Google verified
+          emailVerified: true,
         } as any);
         await user.save();
       }
 
       const deviceInfo = TokenService.extractDeviceInfo(req);
       const { accessToken, refreshToken } = await TokenService.generateTokenPair(user, deviceInfo);
-      
+
       res.json({
         success: true,
         accessToken,

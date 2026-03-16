@@ -330,4 +330,25 @@ userRoutes.put("/me/avatar", protect, upload.single("avatar") as any, async (req
   }
 });
 
+/**
+ * @swagger
+ * /api/users/me/fcm-token:
+ *   put:
+ *     summary: Update FCM token for push notifications
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ */
+userRoutes.put("/me/fcm-token", protect, async (req: any, res: any) => {
+  try {
+    const userId = req.user?.id;
+    const { fcmToken } = req.body;
+    if (!fcmToken) return res.status(400).json({ success: false, message: "fcmToken is required" });
+    await User.findByIdAndUpdate(userId, { fcmToken });
+    res.json({ success: true, message: "FCM token updated" });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 export default userRoutes;

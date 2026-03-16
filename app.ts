@@ -55,6 +55,7 @@ import { brandRoutes } from "./routes/brandRoutes";
 
 // Import Subscription Service for initialization
 import { SubscriptionService } from "./services/SubscriptionService";
+import { initFirebase } from "./services/FirebaseService";
 
 // Initialize App & Socket.io
 const app = express();
@@ -71,12 +72,9 @@ const PORT = process.env.PORT || 5000;
 // Initialize Cache Service only if not in test environment
 if (process.env.NODE_ENV !== 'test') {
   CacheService.init().catch(console.error);
-  
-  // Start alert processing
   AlertService.startAlertProcessing();
-  
-  // Initialize default subscription plans
   SubscriptionService.initializeDefaultPlans().catch(console.error);
+  initFirebase();
 }
 
 // Ensure uploads directory exists (Task B4 Fix)
