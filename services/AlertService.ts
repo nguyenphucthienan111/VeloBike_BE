@@ -2,6 +2,8 @@ import { PriceAlert } from "../models/PriceAlert";
 import { SavedSearch } from "../models/SavedSearch";
 import { Listing, ListingStatus } from "../models/Listing";
 import { NotificationService } from "./NotificationService";
+import { SubscriptionService } from "./SubscriptionService";
+import { PlanType } from "../models/SubscriptionPlan";
 import mongoose from "mongoose";
 
 export class AlertService {
@@ -207,6 +209,60 @@ export class AlertService {
   }
 
   /**
+   * Auto-approve listings based on seller subscription plan's approvalTimeHours
+   */
+  static async processAutoApprovals(): Promise<void> {
+    try {
+      // Get all listings pending approval
+      const pendingListings = await Listing.find({
+        status: ListingStatus.PENDING_APPROVAL,
+      }).lean();
+
+      if (pendingListings.length === 0) return;
+
+      let approvedCount = 0;
+
+      for (const listing of pendingListings) {
+        const sellerId = listing.sellerId?.toString();
+        if (!sellerId) continue;
+
+        // Get seller's subscription to determine approval time
+        const subscription = await SubscriptionService.getSellerSubscription(sellerId);
+        const planType = subscription?.planType ?? PlanType.FREE;
+        const plan = await SubscriptionService.getPlanByType(planType);
+        const approvalHours = plan?.approvalTimeHours ?? 48;
+
+        // Check if listing has been pending long enough
+        const createdAt = new Date(listing.createdAt as any);
+        const hoursPending = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60);
+
+        if (hoursPending >= approvalHours) {
+          await Listing.findByIdAndUpdate(listing._id, {
+            status: ListingStatus.PUBLISHED,
+          });
+
+          // Notify seller
+          await NotificationService.sendNotification(
+            sellerId,
+            "Tin đăng đã được duyệt ✅",
+            `Tin đăng "${listing.title}" của bạn đã được tự động duyệt và hiện đang hiển thị trên Marketplace.`,
+            { type: "LISTING_APPROVED", listingId: listing._id }
+          );
+
+          approvedCount++;
+          console.log(`[AUTO-APPROVE] Listing ${listing._id} approved (seller plan: ${planType}, waited ${hoursPending.toFixed(1)}h / ${approvalHours}h)`);
+        }
+      }
+
+      if (approvedCount > 0) {
+        console.log(`[AUTO-APPROVE] Approved ${approvedCount} listing(s)`);
+      }
+    } catch (error) {
+      console.error("Error processing auto-approvals:", error);
+    }
+  }
+
+  /**
    * Start alert processing cron job (call this from app startup)
    */
   static startAlertProcessing(): void {
@@ -224,6 +280,16 @@ export class AlertService {
     setInterval(async () => {
       await this.cleanupAlerts();
     }, 24 * 60 * 60 * 1000);
+
+    // Auto-approve listings every 15 minutes
+    setInterval(async () => {
+      await this.processAutoApprovals();
+    }, 15 * 60 * 1000);
+
+    // Run once immediately on startup (after a short delay for DB to connect)
+    setTimeout(async () => {
+      await this.processAutoApprovals();
+    }, 5000);
 
     console.log("Alert processing cron jobs started");
   }

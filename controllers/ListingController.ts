@@ -46,7 +46,7 @@ export class ListingController {
 
       // Get all published listings
       let listings = await Listing.find({ status: "PUBLISHED" })
-        .populate("sellerId", "fullName reputation")
+        .populate("sellerId", "fullName reputation address")
         .lean();
 
       // Filter only PREMIUM sellers
@@ -120,7 +120,7 @@ export class ListingController {
       }
 
       let listings = await Listing.find(query)
-        .populate("sellerId", "fullName reputation")
+        .populate("sellerId", "fullName reputation address")
         .lean(); // Use lean for better performance
 
       // Enrich with seller badges
@@ -174,7 +174,7 @@ export class ListingController {
   static async getById(req: any, res: any) {
     try {
       let listing = await Listing.findById(req.params.id)
-        .populate("sellerId", "fullName reputation")
+        .populate("sellerId", "fullName reputation address")
         .lean();
         
       if (!listing) {
@@ -483,7 +483,7 @@ export class ListingController {
       }
 
       const listings = await Listing.find(query)
-        .populate("sellerId", "fullName reputation")
+        .populate("sellerId", "fullName reputation address")
         .sort({ createdAt: -1 })
         .skip((Number(page) - 1) * Number(limit))
         .limit(Number(limit));
@@ -571,7 +571,7 @@ export class ListingController {
 
       const listings = await Listing.find(query)
         .sort({ createdAt: -1 })
-        .populate("sellerId", "fullName reputation")
+        .populate("sellerId", "fullName reputation address")
         .limit(50); // Limit results
 
       // Calculate distance for each listing (optional enhancement)
@@ -682,7 +682,7 @@ export class ListingController {
       }
 
       const listings = await Listing.find(query)
-        .populate("sellerId", "fullName reputation")
+        .populate("sellerId", "fullName reputation address")
         .limit(20);
 
       // Calculate fit score for each listing

@@ -90,3 +90,25 @@ debugRoutes.get("/listing/:listingId/inspection-check", protect, DebugController
  *         description: Token invalid or expired
  */
 debugRoutes.get("/token", protect, DebugController.checkToken);
+
+/**
+ * @swagger
+ * /api/debug/trigger-auto-approve:
+ *   post:
+ *     summary: Manually trigger auto-approval of pending listings
+ *     tags: [Debug]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Auto-approval triggered
+ */
+debugRoutes.post("/trigger-auto-approve", protect, async (req: any, res: any) => {
+  try {
+    const { AlertService } = await import("../services/AlertService");
+    await AlertService.processAutoApprovals();
+    res.json({ success: true, message: "Auto-approval process completed" });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});

@@ -74,9 +74,12 @@ const PORT = process.env.PORT || 5000;
 if (process.env.NODE_ENV !== 'test') {
   CacheService.init().catch(console.error);
   AlertService.startAlertProcessing();
+<<<<<<< Updated upstream
   SubscriptionService.initializeDefaultPlans().catch(console.error);
   AutoApprovalService.startCron();
   initFirebase();
+=======
+>>>>>>> Stashed changes
 }
 
 // Ensure uploads directory exists (Task B4 Fix)
@@ -254,7 +257,11 @@ if (process.env.NODE_ENV !== 'test') {
   const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/velobike";
   mongoose
     .connect(MONGO_URI)
-    .then(() => console.log("✅ MongoDB Connected"))
+    .then(() => {
+      console.log("✅ MongoDB Connected");
+      // Initialize default subscription plans AFTER DB is connected
+      SubscriptionService.initializeDefaultPlans().catch(console.error);
+    })
     .catch((err: any) => console.error("❌ MongoDB Connection Error:", err));
 }
 
