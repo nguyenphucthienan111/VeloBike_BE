@@ -19,15 +19,15 @@ const PAYMENT_LINK_EXPIRATION_MINUTES = 30;
 const DEFAULT_PLANS = [
   {
     name: PlanType.FREE,
-    displayName: "Gói Miễn Phí",
+    displayName: "Free Plan",
     price: 0,
     commissionRate: 0.12, // 12%
     maxListingsPerMonth: 2,
     features: [
-      "2 tin đăng/tháng",
-      "Phí hoa hồng 12%",
-      "Hỗ trợ qua chatbot",
-      "Thời gian duyệt: 24-48h",
+      "2 listings/month",
+      "12% commission fee",
+      "Chatbot support",
+      "Approval time: 24–48h",
     ],
     boostPerWeek: 0,
     freeInspectionsPerMonth: 0,
@@ -37,16 +37,16 @@ const DEFAULT_PLANS = [
   },
   {
     name: PlanType.BASIC,
-    displayName: "Gói Cơ Bản",
+    displayName: "Basic Plan",
     price: 99000,
     commissionRate: 0.10, // 10%
     maxListingsPerMonth: 10,
     features: [
-      "10 tin đăng/tháng",
-      "Phí hoa hồng 10%",
-      "Badge 'Verified Seller' ✓",
-      "Thời gian duyệt: 12-24h",
-      "Thống kê cơ bản",
+      "10 listings/month",
+      "10% commission fee",
+      "'Verified Seller' badge ✓",
+      "Approval time: 12–24h",
+      "Basic analytics",
     ],
     boostPerWeek: 0,
     freeInspectionsPerMonth: 0,
@@ -56,18 +56,18 @@ const DEFAULT_PLANS = [
   },
   {
     name: PlanType.PRO,
-    displayName: "Gói Chuyên Nghiệp",
+    displayName: "Pro Plan",
     price: 299000,
     commissionRate: 0.08, // 8%
     maxListingsPerMonth: 30,
     features: [
-      "30 tin đăng/tháng",
-      "Phí hoa hồng 8%",
-      "Badge 'Pro Seller' ⭐",
-      "Ưu tiên hiển thị trong search",
-      "Thời gian duyệt: 6-12h",
-      "Analytics chi tiết",
-      "1 lần boost tin/tuần miễn phí",
+      "30 listings/month",
+      "8% commission fee",
+      "'Pro Seller' badge ⭐",
+      "Priority placement in search",
+      "Approval time: 6–12h",
+      "Detailed analytics",
+      "1 free boost/week",
     ],
     boostPerWeek: 1,
     freeInspectionsPerMonth: 0,
@@ -77,20 +77,20 @@ const DEFAULT_PLANS = [
   },
   {
     name: PlanType.PREMIUM,
-    displayName: "Gói Cao Cấp",
+    displayName: "Premium Plan",
     price: 500000,
     commissionRate: 0.05, // 5%
     maxListingsPerMonth: -1, // Unlimited
     features: [
-      "Không giới hạn tin đăng",
-      "Phí hoa hồng 5%",
-      "Badge 'Premium Seller' 👑",
-      "Ưu tiên hiển thị cao nhất",
-      "Duyệt tin trong 1-2h",
-      "Miễn phí 2 lần kiểm định/tháng",
-      "Hỗ trợ 24/7 qua hotline",
-      "3 lần boost tin/tuần miễn phí",
-      "Featured trên trang chủ",
+      "Unlimited listings",
+      "5% commission fee",
+      "'Premium Seller' badge 👑",
+      "Top search placement",
+      "Approval time: 1–2h",
+      "2 free inspections/month",
+      "24/7 hotline support",
+      "3 free boosts/week",
+      "Featured on homepage",
     ],
     boostPerWeek: 3,
     freeInspectionsPerMonth: 2,
@@ -284,7 +284,7 @@ export class SubscriptionService {
     if (subscription.status !== SubscriptionStatus.ACTIVE) {
       return {
         canCreate: false,
-        reason: "Subscription không còn hiệu lực",
+        reason: "Subscription is no longer active",
         used: subscription.listingsUsedThisMonth,
         limit: 0,
         planType: subscription.planType,
@@ -298,7 +298,7 @@ export class SubscriptionService {
     if (!plan) {
       return {
         canCreate: false,
-        reason: "Plan không tồn tại",
+        reason: "Plan not found",
         used: 0,
         limit: 0,
         planType: subscription.planType,
@@ -319,7 +319,7 @@ export class SubscriptionService {
     if (subscription.listingsUsedThisMonth >= plan.maxListingsPerMonth) {
       return {
         canCreate: false,
-        reason: `Bạn đã sử dụng hết ${plan.maxListingsPerMonth} tin đăng trong tháng. Nâng cấp gói để đăng thêm!`,
+        reason: `You have used all ${plan.maxListingsPerMonth} listings this month. Upgrade your plan to post more!`,
         used: subscription.listingsUsedThisMonth,
         limit: plan.maxListingsPerMonth,
         planType: subscription.planType,
