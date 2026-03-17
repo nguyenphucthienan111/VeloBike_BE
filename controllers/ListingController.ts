@@ -1082,7 +1082,7 @@ export class ListingController {
       if (subscription.boostsUsedThisWeek >= plan.boostPerWeek) {
         return res.status(400).json({
           success: false,
-          message: `Bạn đã sử dụng hết ${plan.boostPerWeek} lần boost trong tuần. Nâng cấp gói để boost thêm!`,
+          message: `You have used all ${plan.boostPerWeek} boosts this week. Upgrade your plan to boost more!`,
           data: {
             used: subscription.boostsUsedThisWeek,
             limit: plan.boostPerWeek,
