@@ -115,20 +115,28 @@ class ListingController {
                         }
                     }
                 }
-                // Sort by: 1. Boosted, 2. Views, 3. Newest
+                // Sort by tier: 1. Boosted, 2. Views, 3. Newest
+                // Within same tier → time-based rotation (offset by hour) so all sellers get fair exposure
                 const now = new Date();
+                const hourOffset = now.getHours(); // Changes every hour → different sellers surface
                 featuredListings.sort((a, b) => {
-                    // 1. Boosted first
+                    var _a, _b, _c, _d, _e, _f;
                     const aBoost = a.boostedUntil && new Date(a.boostedUntil) > now ? 1 : 0;
                     const bBoost = b.boostedUntil && new Date(b.boostedUntil) > now ? 1 : 0;
+                    // Tier 1: Active boost wins
                     if (aBoost !== bBoost)
                         return bBoost - aBoost;
-                    // 2. Most views
-                    if ((b.views || 0) !== (a.views || 0)) {
-                        return (b.views || 0) - (a.views || 0);
-                    }
-                    // 3. Newest
-                    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                    // Tier 2 (both boosted or both not): rotate by views bucket + hour offset
+                    // Group views into buckets of 10 so minor differences don't dominate
+                    const aViewBucket = Math.floor((a.views || 0) / 10);
+                    const bViewBucket = Math.floor((b.views || 0) / 10);
+                    if (aViewBucket !== bViewBucket)
+                        return bViewBucket - aViewBucket;
+                    // Tier 3 (same view bucket): time-based rotation using seller id hash + hour
+                    // This ensures different sellers appear at top each hour
+                    const aHash = (((_b = (_a = a.sellerId) === null || _a === void 0 ? void 0 : _a._id) === null || _b === void 0 ? void 0 : _b.toString()) || ((_c = a._id) === null || _c === void 0 ? void 0 : _c.toString()) || '').charCodeAt(0) || 0;
+                    const bHash = (((_e = (_d = b.sellerId) === null || _d === void 0 ? void 0 : _d._id) === null || _e === void 0 ? void 0 : _e.toString()) || ((_f = b._id) === null || _f === void 0 ? void 0 : _f.toString()) || '').charCodeAt(0) || 0;
+                    return ((aHash + hourOffset) % 26) - ((bHash + hourOffset) % 26);
                 });
                 // Limit results
                 const limitedListings = featuredListings.slice(0, Number(limit));
@@ -1018,7 +1026,7 @@ class ListingController {
                 if (subscription.boostsUsedThisWeek >= plan.boostPerWeek) {
                     return res.status(400).json({
                         success: false,
-                        message: `Bạn đã sử dụng hết ${plan.boostPerWeek} lần boost trong tuần. Nâng cấp gói để boost thêm!`,
+                        message: `You have used all ${plan.boostPerWeek} boosts this week. Upgrade your plan to boost more!`,
                         data: {
                             used: subscription.boostsUsedThisWeek,
                             limit: plan.boostPerWeek,

@@ -311,7 +311,7 @@ export class AdminController {
     try {
       const { period = "month" } = req.query; // day, week, month, year
 
-      const dateFilter = this.getDateFilter(period as string);
+      const dateFilter = AdminController.getDateFilter(period as string);
 
       const analytics = await Promise.all([
         Order.countDocuments({ createdAt: { $gte: dateFilter } }),

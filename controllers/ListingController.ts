@@ -72,21 +72,29 @@ export class ListingController {
         }
       }
 
-      // Sort by: 1. Boosted, 2. Views, 3. Newest
+      // Sort by tier: 1. Boosted, 2. Views, 3. Newest
+      // Within same tier → time-based rotation (offset by hour) so all sellers get fair exposure
       const now = new Date();
+      const hourOffset = now.getHours(); // Changes every hour → different sellers surface
+
       featuredListings.sort((a: any, b: any) => {
-        // 1. Boosted first
         const aBoost = a.boostedUntil && new Date(a.boostedUntil) > now ? 1 : 0;
         const bBoost = b.boostedUntil && new Date(b.boostedUntil) > now ? 1 : 0;
+
+        // Tier 1: Active boost wins
         if (aBoost !== bBoost) return bBoost - aBoost;
 
-        // 2. Most views
-        if ((b.views || 0) !== (a.views || 0)) {
-          return (b.views || 0) - (a.views || 0);
-        }
+        // Tier 2 (both boosted or both not): rotate by views bucket + hour offset
+        // Group views into buckets of 10 so minor differences don't dominate
+        const aViewBucket = Math.floor((a.views || 0) / 10);
+        const bViewBucket = Math.floor((b.views || 0) / 10);
+        if (aViewBucket !== bViewBucket) return bViewBucket - aViewBucket;
 
-        // 3. Newest
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        // Tier 3 (same view bucket): time-based rotation using seller id hash + hour
+        // This ensures different sellers appear at top each hour
+        const aHash = (a.sellerId?._id?.toString() || a._id?.toString() || '').charCodeAt(0) || 0;
+        const bHash = (b.sellerId?._id?.toString() || b._id?.toString() || '').charCodeAt(0) || 0;
+        return ((aHash + hourOffset) % 26) - ((bHash + hourOffset) % 26);
       });
 
       // Limit results

@@ -328,7 +328,7 @@ class AdminController {
             var _a;
             try {
                 const { period = "month" } = req.query; // day, week, month, year
-                const dateFilter = this.getDateFilter(period);
+                const dateFilter = AdminController.getDateFilter(period);
                 const analytics = yield Promise.all([
                     Order_1.Order.countDocuments({ createdAt: { $gte: dateFilter } }),
                     Order_1.Order.aggregate([
