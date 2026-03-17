@@ -92,7 +92,7 @@ class ListingController {
                 const { limit = 10 } = req.query;
                 // Get all published listings
                 let listings = yield Listing_1.Listing.find({ status: "PUBLISHED" })
-                    .populate("sellerId", "fullName reputation")
+                    .populate("sellerId", "fullName reputation address")
                     .lean();
                 // Filter only PREMIUM sellers
                 const featuredListings = [];
@@ -162,7 +162,7 @@ class ListingController {
                         query["pricing.amount"].$lte = Number(maxPrice);
                 }
                 let listings = yield Listing_1.Listing.find(query)
-                    .populate("sellerId", "fullName reputation")
+                    .populate("sellerId", "fullName reputation address")
                     .lean(); // Use lean for better performance
                 // Enrich with seller badges
                 listings = yield enrichListingsWithBadges(listings);
@@ -213,7 +213,7 @@ class ListingController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 let listing = yield Listing_1.Listing.findById(req.params.id)
-                    .populate("sellerId", "fullName reputation")
+                    .populate("sellerId", "fullName reputation address")
                     .lean();
                 if (!listing) {
                     res.status(404).json({ success: false, message: "Listing not found" });
@@ -302,6 +302,7 @@ class ListingController {
                 }
                 // Update status to PENDING_APPROVAL per SRS BikeMarket
                 listing.status = Listing_1.ListingStatus.PENDING_APPROVAL;
+                listing.submittedAt = new Date();
                 yield listing.save();
                 // TODO: Send notification to admin about new listing pending approval
                 res.json({
@@ -490,7 +491,7 @@ class ListingController {
                     query.status = status;
                 }
                 const listings = yield Listing_1.Listing.find(query)
-                    .populate("sellerId", "fullName reputation")
+                    .populate("sellerId", "fullName reputation address")
                     .sort({ createdAt: -1 })
                     .skip((Number(page) - 1) * Number(limit))
                     .limit(Number(limit));
@@ -565,7 +566,7 @@ class ListingController {
                 }
                 const listings = yield Listing_1.Listing.find(query)
                     .sort({ createdAt: -1 })
-                    .populate("sellerId", "fullName reputation")
+                    .populate("sellerId", "fullName reputation address")
                     .limit(50); // Limit results
                 // Calculate distance for each listing (optional enhancement)
                 const listingsWithDistance = listings.map((listing) => {
@@ -653,7 +654,7 @@ class ListingController {
                     };
                 }
                 const listings = yield Listing_1.Listing.find(query)
-                    .populate("sellerId", "fullName reputation")
+                    .populate("sellerId", "fullName reputation address")
                     .limit(20);
                 // Calculate fit score for each listing
                 const listingsWithFit = listings.map((listing) => {

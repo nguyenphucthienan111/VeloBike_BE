@@ -134,6 +134,9 @@ const ListingSchema = new mongoose_1.Schema({
     // Boost feature
     boostedUntil: { type: Date, index: true }, // Thời gian boost hết hạn
     boostCount: { type: Number, default: 0 }, // Số lần đã boost
+    // Auto-approval tracking
+    submittedAt: { type: Date, index: true }, // When seller submitted for approval
+    autoApprovedAt: { type: Date }, // When auto-approved by cron
 }, {
     timestamps: true,
     discriminatorKey: "type",

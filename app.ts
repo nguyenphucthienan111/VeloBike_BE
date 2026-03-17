@@ -74,12 +74,9 @@ const PORT = process.env.PORT || 5000;
 if (process.env.NODE_ENV !== 'test') {
   CacheService.init().catch(console.error);
   AlertService.startAlertProcessing();
-<<<<<<< Updated upstream
   SubscriptionService.initializeDefaultPlans().catch(console.error);
   AutoApprovalService.startCron();
   initFirebase();
-=======
->>>>>>> Stashed changes
 }
 
 // Ensure uploads directory exists (Task B4 Fix)

@@ -31,6 +31,7 @@ const requestLoggerMiddleware_1 = require("./middleware/requestLoggerMiddleware"
 // Import Services
 const CacheService_1 = require("./services/CacheService");
 const AlertService_1 = require("./services/AlertService");
+const AutoApprovalService_1 = require("./services/AutoApprovalService");
 // Import Routes
 const authRoutes_1 = require("./routes/authRoutes");
 const listingRoutes_1 = require("./routes/listingRoutes");
@@ -80,6 +81,7 @@ if (process.env.NODE_ENV !== 'test') {
     CacheService_1.CacheService.init().catch(console.error);
     AlertService_1.AlertService.startAlertProcessing();
     SubscriptionService_1.SubscriptionService.initializeDefaultPlans().catch(console.error);
+    AutoApprovalService_1.AutoApprovalService.startCron();
     (0, FirebaseService_1.initFirebase)();
 }
 // Ensure uploads directory exists (Task B4 Fix)
@@ -244,7 +246,11 @@ if (process.env.NODE_ENV !== 'test') {
     const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/velobike";
     mongoose_1.default
         .connect(MONGO_URI)
-        .then(() => console.log("✅ MongoDB Connected"))
+        .then(() => {
+        console.log("✅ MongoDB Connected");
+        // Initialize default subscription plans AFTER DB is connected
+        SubscriptionService_1.SubscriptionService.initializeDefaultPlans().catch(console.error);
+    })
         .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 }
 // --- ROUTES REGISTRATION WITH SPECIFIC RATE LIMITING ---

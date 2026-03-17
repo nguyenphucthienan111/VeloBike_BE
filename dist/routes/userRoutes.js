@@ -146,7 +146,7 @@ exports.userRoutes.post("/kyc", authMiddleware_1.protect, (req, res) => __awaite
  */
 exports.userRoutes.get("/:id", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const user = yield User_1.User.findById(req.params.id).select("fullName avatar reputation role");
+        const user = yield User_1.User.findById(req.params.id).select("fullName avatar reputation role phone address");
         if (!user)
             return res.status(404).json({ success: false, message: "User not found" });
         res.json({ success: true, data: user });
