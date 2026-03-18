@@ -62,6 +62,17 @@ export interface IUser extends MongooseDocument {
     accountNumber?: string;
     bankName?: string;
   };
+  inspectorProfile?: {
+    bio?: string;
+    yearsOfExperience?: number;
+    specializations?: string[];
+    certificates?: Array<{
+      name: string;
+      issuedBy: string;
+      issuedYear: number;
+      imageUrl?: string;
+    }>;
+  };
   isActive?: boolean;
   emailVerified?: boolean;
   resetPasswordToken?: string;
@@ -125,6 +136,17 @@ const UserSchema = new Schema<IUser>(
       accountName: String,
       accountNumber: String,
       bankName: String,
+    },
+    inspectorProfile: {
+      bio: String,
+      yearsOfExperience: Number,
+      specializations: [String],
+      certificates: [{
+        name: String,
+        issuedBy: String,
+        issuedYear: Number,
+        imageUrl: String,
+      }],
     },
     isActive: { type: Boolean, default: true },
     emailVerified: { type: Boolean, default: false },

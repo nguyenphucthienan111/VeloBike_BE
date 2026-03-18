@@ -55,7 +55,7 @@ export class AdminController {
 
       const users = await User.find(query)
         .select("-passwordHash")
-        .sort({ createdAt: -1 })
+        .sort({ _id: -1 })
         .skip((Number(page) - 1) * Number(limit))
         .limit(Number(limit));
 

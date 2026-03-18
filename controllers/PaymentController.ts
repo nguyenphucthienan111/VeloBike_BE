@@ -172,21 +172,24 @@ export class PaymentController {
       // Import Transaction model
       const { Transaction } = await import("../models/Transaction");
 
-      // Create PAYMENT_HOLD transaction (simulate escrow)
-      await Transaction.create({
-        userId: order.buyerId,
-        type: "PAYMENT_HOLD",
-        amount: order.financials.totalAmount,
-        status: "COMPLETED",
-        relatedOrderId: order._id,
-        description: `[SIMULATED] Escrow locked for order #${order._id}`,
-        paymentGatewayRef: `sim_${Date.now()}`,
-        metadata: {
-          simulated: true,
-          escrowStatus: "LOCKED",
-          lockedAt: new Date(),
-        },
-      });
+      // Create PAYMENT_HOLD transaction (simulate escrow) — guard against duplicate
+      const existingHold = await Transaction.findOne({ relatedOrderId: order._id, type: "PAYMENT_HOLD" });
+      if (!existingHold) {
+        await Transaction.create({
+          userId: order.buyerId,
+          type: "PAYMENT_HOLD",
+          amount: order.financials.totalAmount,
+          status: "COMPLETED",
+          relatedOrderId: order._id,
+          description: `[SIMULATED] Escrow locked for order #${order._id}`,
+          paymentGatewayRef: `sim_${Date.now()}`,
+          metadata: {
+            simulated: true,
+            escrowStatus: "LOCKED",
+            lockedAt: new Date(),
+          },
+        });
+      }
 
       // Update order status to ESCROW_LOCKED
       await OrderService.lockEscrow(orderId, `sim_tx_${Date.now()}`);

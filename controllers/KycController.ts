@@ -190,8 +190,31 @@ export class KycController {
       
       if (status === "VERIFIED" && confidence >= minConfidence && (faceMatch || isDev)) {
         newStatus = KycStatus.VERIFIED;
+
+        // Check duplicate CCCD before verifying
+        const documentId = documentData?.id || documentData?.id_number || documentData?.document_id;
+        if (documentId) {
+          const existingKyc = await User.findOne({
+            'kycData.documentId': documentId,
+            _id: { $ne: userId },
+            kycStatus: KycStatus.VERIFIED,
+          });
+          if (existingKyc) {
+            user.kycStatus = KycStatus.REJECTED;
+            await user.save();
+            await NotificationService.sendNotification(
+              userId,
+              "KYC Verification Failed",
+              "This ID document is already linked to another verified account.",
+              { kycStatus: KycStatus.REJECTED }
+            );
+            return res.json({ success: true, message: "Webhook processed", kycStatus: KycStatus.REJECTED });
+          }
+        }
+
         user.kycData = {
           ...user.kycData,
+          documentId: documentId || user.kycData?.documentId,
           verifiedAt: new Date(),
           confidence,
           documentData,
@@ -246,6 +269,21 @@ export class KycController {
       // Update KYC status
       user.kycStatus = status;
       if (status === KycStatus.VERIFIED) {
+        // Check duplicate CCCD before manual verify
+        const documentId = user.kycData?.documentId;
+        if (documentId) {
+          const existingKyc = await User.findOne({
+            'kycData.documentId': documentId,
+            _id: { $ne: userId },
+            kycStatus: KycStatus.VERIFIED,
+          });
+          if (existingKyc) {
+            return res.status(400).json({
+              success: false,
+              message: `CCCD/CMND này đã được xác minh ở tài khoản khác (${existingKyc.email})`,
+            });
+          }
+        }
         user.kycData = {
           ...user.kycData,
           verifiedAt: new Date(),

@@ -25,11 +25,21 @@ export class TokenService {
 
   /**
    * Generate refresh token (long-lived) and store in database
+   * Revokes previous tokens from the same device to prevent accumulation
    */
   static async generateRefreshToken(
     userId: string, 
     deviceInfo?: { userAgent?: string; ipAddress?: string; deviceId?: string }
   ): Promise<string> {
+    // Revoke existing tokens for this user+device combo to avoid accumulation
+    if (deviceInfo?.userAgent) {
+      await UserToken.deleteMany({
+        userId,
+        tokenType: "REFRESH",
+        "deviceInfo.userAgent": deviceInfo.userAgent,
+      });
+    }
+
     // Generate secure random token
     const tokenString = crypto.randomBytes(64).toString('hex');
     

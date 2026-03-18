@@ -1,12 +1,14 @@
 import { Withdrawal, WithdrawalStatus, IWithdrawal } from "../models/Withdrawal";
 import { User } from "../models/User";
 import { Transaction } from "../models/Transaction";
+import { Order, OrderStatus } from "../models/Order";
 import { Types } from "mongoose";
 
 // Withdrawal fee policy
 const WITHDRAWAL_FEE_THRESHOLD = 1000000; // 1 triệu
 const WITHDRAWAL_FEE_BELOW_THRESHOLD = 10000; // 10k phí
 const MINIMUM_WITHDRAWAL = 50000; // Tối thiểu 50k
+const DISPUTE_WINDOW_DAYS = 7; // Seller phải chờ 7 ngày sau COMPLETED mới rút được
 
 export class WithdrawalService {
   /**
@@ -51,6 +53,31 @@ export class WithdrawalService {
     if (user.wallet.balance < amount) {
       throw new Error(
         `Số dư không đủ. Số dư hiện tại: ${user.wallet.balance.toLocaleString()} VNĐ, cần: ${amount.toLocaleString()} VNĐ`
+      );
+    }
+
+    // Check dispute window: tính tổng tiền đang trong hold period (COMPLETED < 7 ngày)
+    const windowCutoff = new Date(Date.now() - DISPUTE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const recentReleases = await Transaction.aggregate([
+      {
+        $match: {
+          userId: new Types.ObjectId(userId),
+          type: "PAYMENT_RELEASE",
+          status: "COMPLETED",
+          createdAt: { $gt: windowCutoff },
+        },
+      },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+    const heldAmount = recentReleases[0]?.total || 0;
+    const availableToWithdraw = Math.max(0, user.wallet.balance - heldAmount);
+
+    if (amount > availableToWithdraw) {
+      const releaseDate = new Date(windowCutoff.getTime() + DISPUTE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+      throw new Error(
+        `${heldAmount.toLocaleString()} VNĐ đang trong thời gian bảo vệ tranh chấp (${DISPUTE_WINDOW_DAYS} ngày). ` +
+        `Số tiền có thể rút: ${availableToWithdraw.toLocaleString()} VNĐ. ` +
+        `Tiền sẽ được mở khóa sau ${releaseDate.toLocaleDateString('vi-VN')}.`
       );
     }
 

@@ -122,22 +122,25 @@ export class PaymentService {
           return;
         }
 
-        // Create PAYMENT_HOLD transaction record (tiền đang treo trên PayOS)
-        await Transaction.create({
-          userId: order.buyerId,
-          type: "PAYMENT_HOLD",
-          amount: order.financials.totalAmount,
-          status: "COMPLETED",
-          relatedOrderId: order._id,
-          description: `Escrow locked for order #${order._id}`,
-          paymentGatewayRef: data.transactionId || `payos_${orderCode}`,
-          metadata: {
-            orderCode,
-            payosTransactionId: data.transactionId,
-            escrowStatus: "LOCKED",
-            lockedAt: new Date(),
-          },
-        });
+        // Create PAYMENT_HOLD transaction record (tiền đang treo trên PayOS) — guard against duplicate
+        const existingHold = await Transaction.findOne({ relatedOrderId: order._id, type: "PAYMENT_HOLD" });
+        if (!existingHold) {
+          await Transaction.create({
+            userId: order.buyerId,
+            type: "PAYMENT_HOLD",
+            amount: order.financials.totalAmount,
+            status: "COMPLETED",
+            relatedOrderId: order._id,
+            description: `Escrow locked for order #${order._id}`,
+            paymentGatewayRef: data.transactionId || `payos_${orderCode}`,
+            metadata: {
+              orderCode,
+              payosTransactionId: data.transactionId,
+              escrowStatus: "LOCKED",
+              lockedAt: new Date(),
+            },
+          });
+        }
 
         // Use OrderService to lock escrow (enforces FSM rules)
         await OrderService.lockEscrow(

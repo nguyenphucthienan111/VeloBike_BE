@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import { Dispute, DisputeStatus, DisputeReason } from "../models/Dispute";
-import { Order } from "../models/Order";
+import { Order, OrderStatus } from "../models/Order";
 import { User } from "../models/User";
+import { Transaction } from "../models/Transaction";
+import { Listing } from "../models/Listing";
 import { OrderService } from "../services/OrderService";
 import mongoose from "mongoose";
 
@@ -19,6 +21,20 @@ export class DisputeController {
       const order = await Order.findById(orderId);
       if (!order) {
         return res.status(404).json({ success: false, message: "Order not found" });
+      }
+
+      // Dispute window: chỉ cho phép mở dispute trong 7 ngày sau COMPLETED
+      if (order.status === OrderStatus.COMPLETED) {
+        const completedEntry = order.timeline?.slice().reverse().find((t: any) => t.status === OrderStatus.COMPLETED);
+        if (completedEntry) {
+          const daysSinceCompleted = (Date.now() - new Date(completedEntry.timestamp).getTime()) / (1000 * 60 * 60 * 24);
+          if (daysSinceCompleted > 7) {
+            return res.status(400).json({
+              success: false,
+              message: "Dispute window has expired. Orders can only be disputed within 7 days of completion.",
+            });
+          }
+        }
       }
 
       // Verify dispute reason is valid
@@ -114,7 +130,7 @@ export class DisputeController {
       const disputes = await Dispute.find(query)
         .populate("claimantId", "fullName avatar")
         .populate("respondentId", "fullName avatar")
-        .populate("orderId", "listingId")
+        .populate({ path: "orderId", select: "_id listingId", populate: { path: "listingId", select: "title" } })
         .sort({ createdAt: -1 })
         .skip((Number(page) - 1) * Number(limit))
         .limit(Number(limit));
@@ -174,14 +190,64 @@ export class DisputeController {
 
       await dispute.save();
 
-      // Handle compensation if needed
+      // Handle compensation — deduct from seller, credit to buyer
       if (compensationAmount && compensationAmount > 0) {
+        const order = await Order.findById(dispute.orderId);
         const recipient = await User.findById(dispute.claimantId);
+
         if (recipient) {
+          // If order exists and is COMPLETED, claw back from seller
+          if (order && order.status === "COMPLETED") {
+            const seller = await User.findById(order.sellerId);
+            if (seller) {
+              const clawback = Math.min(compensationAmount, seller.wallet.balance);
+              seller.wallet.balance -= clawback;
+              await seller.save();
+
+              // Record clawback transaction
+              await Transaction.create({
+                userId: order.sellerId,
+                type: "REFUND",
+                amount: -clawback,
+                status: "COMPLETED",
+                relatedOrderId: order._id,
+                description: `Dispute clawback for order #${order._id} — dispute #${dispute._id}`,
+                metadata: { disputeId: dispute._id, clawback: true },
+              });
+            }
+
+            // Update order status to REFUNDED
+            order.status = OrderStatus.REFUNDED;
+            order.timeline.push({
+              status: OrderStatus.REFUNDED,
+              timestamp: new Date(),
+              actorId: new mongoose.Types.ObjectId(adminId),
+              note: `Dispute resolved — refund ${compensationAmount} VND to buyer`,
+            } as any);
+            await order.save();
+
+            // Mark listing as SOLD — dispute means transaction is done regardless of outcome
+            if (order.listingId) {
+              await Listing.findByIdAndUpdate(order.listingId, { status: "SOLD" });
+            }
+          }
+
+          // Credit buyer
           const oldBalance = recipient.wallet.balance;
           recipient.wallet.balance += compensationAmount;
           await recipient.save();
-          
+
+          // Record refund transaction for buyer
+          await Transaction.create({
+            userId: dispute.claimantId,
+            type: "REFUND",
+            amount: compensationAmount,
+            status: "COMPLETED",
+            relatedOrderId: dispute.orderId,
+            description: `Dispute refund for order #${dispute.orderId} — dispute #${dispute._id}`,
+            metadata: { disputeId: dispute._id },
+          });
+
           console.log(`[DISPUTE REFUND] User ${recipient._id} balance: ${oldBalance} -> ${recipient.wallet.balance} (+${compensationAmount})`);
         } else {
           console.error(`[DISPUTE REFUND ERROR] Recipient not found: ${dispute.claimantId}`);
@@ -246,7 +312,7 @@ export class DisputeController {
   static async closeDispute(req: Request, res: Response) {
     try {
       const { disputeId } = req.params;
-      const adminId = (req as any).user?.id; // Fix: use req.user.id
+      const adminId = (req as any).user?.id;
 
       // Verify admin role
       const admin = await User.findById(adminId);
@@ -262,6 +328,20 @@ export class DisputeController {
 
       if (!dispute) {
         return res.status(404).json({ success: false, message: "Dispute not found" });
+      }
+
+      // If order is still DISPUTED (dispute rejected, no refund), restore it to COMPLETED
+      // and keep listing as SOLD (transaction stands)
+      const order = await Order.findById(dispute.orderId);
+      if (order && order.status === OrderStatus.DISPUTED) {
+        order.status = OrderStatus.COMPLETED;
+        order.timeline.push({
+          status: OrderStatus.COMPLETED,
+          timestamp: new Date(),
+          actorId: new mongoose.Types.ObjectId(adminId),
+          note: "Dispute closed — order restored to COMPLETED",
+        } as any);
+        await order.save();
       }
 
       res.status(200).json({
@@ -337,7 +417,7 @@ export class DisputeController {
       const disputes = await Dispute.find(query)
         .populate("claimantId", "fullName email")
         .populate("respondentId", "fullName email")
-        .populate("orderId", "listingId")
+        .populate({ path: "orderId", select: "_id listingId", populate: { path: "listingId", select: "title" } })
         .sort({ createdAt: -1 })
         .skip((Number(page) - 1) * Number(limit))
         .limit(Number(limit));

@@ -651,7 +651,7 @@ export class InspectionController {
       const { page = 1, limit = 20 } = req.query;
 
       const inspections = await Inspection.find({ inspectorId })
-        .populate("orderId")
+        .populate({ path: "orderId", populate: { path: "listingId", select: "title" } })
         .sort({ createdAt: -1 })
         .skip((Number(page) - 1) * Number(limit))
         .limit(Number(limit));

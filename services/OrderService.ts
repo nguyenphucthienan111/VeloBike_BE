@@ -309,6 +309,18 @@ export class OrderService {
     const { itemPrice, platformFee, inspectionFee } = order.financials;
     const sellerPayout = itemPrice - platformFee;
 
+    // Get commission rate info for description
+    const commissionRate = itemPrice > 0 ? platformFee / itemPrice : 0;
+    const commissionPercent = Math.round(commissionRate * 100);
+
+    // Get seller's subscription plan name for description
+    let planName = "FREE";
+    try {
+      const { SubscriptionService } = await import("./SubscriptionService");
+      const sub = await SubscriptionService.getSellerSubscription(order.sellerId.toString());
+      if (sub) planName = sub.planType;
+    } catch (_) {}
+
     // Create PAYMENT_RELEASE transaction for seller
     await Transaction.create({
       userId: order.sellerId,
@@ -316,13 +328,16 @@ export class OrderService {
       amount: sellerPayout,
       status: "COMPLETED",
       relatedOrderId: order._id,
-      description: `Payment released for order #${order._id}`,
+      description: `Giải ngân đơn hàng #${order._id} | Giá bán: ${itemPrice.toLocaleString("vi-VN")}đ | Phí hoa hồng (${commissionPercent}% - gói ${planName}): -${platformFee.toLocaleString("vi-VN")}đ | Thực nhận: ${sellerPayout.toLocaleString("vi-VN")}đ`,
       metadata: {
         escrowStatus: "RELEASED",
         releasedAt: new Date(),
         breakdown: {
           itemPrice,
           platformFee,
+          commissionRate,
+          commissionPercent,
+          planName,
           sellerReceived: sellerPayout,
         },
       },
@@ -351,14 +366,20 @@ export class OrderService {
       });
     }
 
-    // Create PLATFORM_FEE transaction (for tracking)
+    // Create PLATFORM_FEE transaction (for tracking against seller)
     await Transaction.create({
-      userId: order.sellerId, // Track against seller for reference
+      userId: order.sellerId,
       type: "PLATFORM_FEE",
       amount: platformFee,
       status: "COMPLETED",
       relatedOrderId: order._id,
-      description: `Platform fee collected for order #${order._id}`,
+      description: `Phí hoa hồng ${commissionPercent}% (gói ${planName}) cho đơn hàng #${order._id}`,
+      metadata: {
+        commissionRate,
+        commissionPercent,
+        planName,
+        itemPrice,
+      },
     });
 
     // Credit Platform Account (if configured)

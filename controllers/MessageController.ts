@@ -27,9 +27,13 @@ export class MessageController {
       });
 
       if (conversation) {
+        const populated = await conversation.populate([
+          { path: "buyerId", select: "fullName avatar" },
+          { path: "sellerId", select: "fullName avatar" },
+        ]);
         return res.status(200).json({
           success: true,
-          data: conversation,
+          data: populated,
         });
       }
 
@@ -60,10 +64,15 @@ export class MessageController {
 
       await newConversation.save();
 
+      const populated = await newConversation.populate([
+        { path: "buyerId", select: "fullName avatar" },
+        { path: "sellerId", select: "fullName avatar" },
+      ]);
+
       res.status(201).json({
         success: true,
         message: "Conversation created",
-        data: newConversation,
+        data: populated,
       });
     } catch (error: any) {
       res

@@ -2,6 +2,9 @@ import { Router } from "express";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { User, UserRole } from "../models/User";
+import { InspectorApplication } from "../models/InspectorApplication";
+import { InspectorReview } from "../models/InspectorReview";
+import mongoose from "mongoose";
 import { protect } from "../middleware/authMiddleware";
 
 export const userRoutes = Router();
@@ -113,6 +116,149 @@ userRoutes.post("/kyc", protect, async (req: any, res: any) => {
     success: false, 
     message: "This endpoint is deprecated. Please use POST /api/auth/kyc-submit instead" 
   });
+});
+
+/**
+ * @swagger
+ * /api/users/inspectors/{id}/profile:
+ *   get:
+ *     summary: Get public profile of an inspector (bio, certs, rating stats)
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Inspector public profile
+ */
+/**
+ * @swagger
+ * /api/users/inspectors:
+ *   get:
+ *     summary: List all active inspectors (public)
+ *     tags: [Users]
+ *     parameters:
+ *       - in: query
+ *         name: city
+ *         schema: { type: string }
+ *       - in: query
+ *         name: specialization
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: List of inspectors with basic info
+ */
+userRoutes.get("/inspectors", async (req: any, res: any) => {
+  try {
+    const inspectors = await User.find({ role: UserRole.INSPECTOR, isActive: true })
+      .select("fullName avatar reputation address createdAt inspectorProfile")
+      .sort({ "reputation.score": -1 });
+
+    // Attach application data as fallback (bio, specializations, yearsOfExperience)
+    const ids = inspectors.map(u => u._id);
+    const applications = await InspectorApplication.find({ userId: { $in: ids }, status: "APPROVED" })
+      .select("userId bio yearsOfExperience specializations");
+
+    const appMap = new Map(applications.map(a => [a.userId.toString(), a]));
+
+    const data = inspectors.map(u => {
+      const app = appMap.get(u._id.toString());
+      const ip = (u as any).inspectorProfile;
+      return {
+        _id: u._id,
+        fullName: u.fullName,
+        avatar: u.avatar,
+        address: u.address,
+        reputation: u.reputation,
+        bio: ip?.bio || app?.bio || '',
+        yearsOfExperience: ip?.yearsOfExperience ?? app?.yearsOfExperience ?? 0,
+        specializations: ip?.specializations?.length ? ip.specializations : (app?.specializations || []),
+      };
+    });
+
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+userRoutes.get("/inspectors/:id/profile", async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id).select("fullName avatar reputation role address phone createdAt inspectorProfile");
+    if (!user || user.role !== UserRole.INSPECTOR) {
+      return res.status(404).json({ success: false, message: "Inspector not found" });
+    }
+
+    // Fallback: lấy application đã APPROVED nếu inspectorProfile chưa có data
+    const application = await InspectorApplication.findOne({ userId: id, status: "APPROVED" })
+      .select("bio yearsOfExperience specializations certificates phone");
+
+    const ip = user.inspectorProfile;
+    const bio = ip?.bio || application?.bio || "";
+    const yearsOfExperience = ip?.yearsOfExperience ?? application?.yearsOfExperience ?? 0;
+    const specializations = (ip?.specializations?.length ? ip.specializations : application?.specializations) || [];
+    const certificates = (ip?.certificates?.length ? ip.certificates : application?.certificates) || [];
+
+    // Aggregate review stats
+    const categoryStats = await InspectorReview.aggregate([
+      { $match: { inspectorId: new mongoose.Types.ObjectId(id) } },
+      {
+        $group: {
+          _id: null,
+          avgRating: { $avg: "$rating" },
+          avgProfessionalism: { $avg: "$categories.professionalism" },
+          avgAccuracy: { $avg: "$categories.accuracy" },
+          avgCommunication: { $avg: "$categories.communication" },
+          avgTimeliness: { $avg: "$categories.timeliness" },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const stats = categoryStats[0] || {
+      avgRating: 0, avgProfessionalism: 0, avgAccuracy: 0,
+      avgCommunication: 0, avgTimeliness: 0, count: 0,
+    };
+
+    // Lấy 5 review gần nhất
+    const recentReviews = await InspectorReview.find({ inspectorId: id })
+      .populate("reviewerId", "fullName avatar")
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select("rating comment reviewerRole categories createdAt reviewerId");
+
+    res.json({
+      success: true,
+      data: {
+        _id: user._id,
+        fullName: user.fullName,
+        avatar: user.avatar,
+        address: user.address,
+        memberSince: user.createdAt,
+        bio,
+        yearsOfExperience,
+        specializations,
+        certificates,
+        reputation: {
+          score: Math.round((stats.avgRating || user.reputation?.score || 5) * 10) / 10,
+          reviewCount: stats.count || user.reputation?.reviewCount || 0,
+          categories: {
+            professionalism: Math.round((stats.avgProfessionalism || 0) * 10) / 10,
+            accuracy: Math.round((stats.avgAccuracy || 0) * 10) / 10,
+            communication: Math.round((stats.avgCommunication || 0) * 10) / 10,
+            timeliness: Math.round((stats.avgTimeliness || 0) * 10) / 10,
+          },
+        },
+        recentReviews,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 /**
@@ -352,3 +498,37 @@ userRoutes.put("/me/fcm-token", protect, async (req: any, res: any) => {
 });
 
 export default userRoutes;
+
+// PUT /api/users/me/inspector-profile
+// Update inspector bio, experience, specializations, certificates
+userRoutes.put("/me/inspector-profile", protect, async (req: any, res: any) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (user.role !== UserRole.INSPECTOR) {
+      return res.status(403).json({ success: false, message: "Only inspectors can update inspector profile" });
+    }
+
+    const { bio, yearsOfExperience, specializations, certificates } = req.body;
+
+    const updated = await User.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          "inspectorProfile.bio": bio ?? user.inspectorProfile?.bio,
+          "inspectorProfile.yearsOfExperience": yearsOfExperience ?? user.inspectorProfile?.yearsOfExperience,
+          "inspectorProfile.specializations": specializations ?? user.inspectorProfile?.specializations,
+          "inspectorProfile.certificates": certificates ?? user.inspectorProfile?.certificates,
+        },
+      },
+      { new: true }
+    ).select("-passwordHash");
+
+    res.json({ success: true, data: updated, message: "Inspector profile updated" });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
