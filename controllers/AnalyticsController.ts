@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Listing } from "../models/Listing";
 import { Order, OrderStatus } from "../models/Order";
 import { Transaction } from "../models/Transaction";
+import { Types } from "mongoose";
 
 export class AnalyticsController {
   /**
@@ -15,69 +16,120 @@ export class AnalyticsController {
         return res.status(401).json({ success: false, message: "Unauthorized" });
       }
 
-      // Get all seller's listings
-      const listings = await Listing.find({ sellerId });
-      const listingIds = listings.map(l => l._id);
+      const sellerObjId = new Types.ObjectId(sellerId);
 
-      // Total views
-      const totalViews = listings.reduce((sum, listing) => sum + (listing.views || 0), 0);
+      // Run all queries in parallel
+      const [listingAgg, orderAgg, topListingsAgg] = await Promise.all([
+        // Listing stats via aggregation (no full load)
+        Listing.aggregate([
+          { $match: { sellerId: sellerObjId } },
+          {
+            $group: {
+              _id: "$status",
+              count: { $sum: 1 },
+              totalViews: { $sum: { $ifNull: ["$views", 0] } },
+            },
+          },
+        ]),
 
-      // Total listings by status
-      const listingsByStatus = {
-        draft: listings.filter(l => l.status === "DRAFT").length,
-        pending: listings.filter(l => l.status === "PENDING_APPROVAL").length,
-        published: listings.filter(l => l.status === "PUBLISHED").length,
-        sold: listings.filter(l => l.status === "SOLD").length,
-        rejected: listings.filter(l => l.status === "REJECTED").length,
+        // Order stats via aggregation
+        Order.aggregate([
+          { $match: { sellerId: sellerObjId } },
+          {
+            $group: {
+              _id: "$status",
+              count: { $sum: 1 },
+              revenue: {
+                $sum: {
+                  $cond: [
+                    { $eq: ["$status", OrderStatus.COMPLETED] },
+                    { $subtract: ["$financials.itemPrice", "$financials.platformFee"] },
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+        ]),
+
+        // Top listings: group completed orders by listingId
+        Order.aggregate([
+          { $match: { sellerId: sellerObjId, status: OrderStatus.COMPLETED } },
+          {
+            $group: {
+              _id: "$listingId",
+              sales: { $sum: 1 },
+              revenue: {
+                $sum: { $subtract: ["$financials.itemPrice", "$financials.platformFee"] },
+              },
+            },
+          },
+          { $sort: { revenue: -1 } },
+          { $limit: 5 },
+        ]),
+      ]);
+
+      // Process listing aggregation
+      let totalViews = 0;
+      let totalListings = 0;
+      const listingsByStatus: Record<string, number> = { draft: 0, pending: 0, published: 0, sold: 0, rejected: 0 };
+      const statusMap: Record<string, string> = {
+        DRAFT: "draft", PENDING_APPROVAL: "pending", PUBLISHED: "published", SOLD: "sold", REJECTED: "rejected",
       };
+      for (const row of listingAgg) {
+        totalViews += row.totalViews;
+        totalListings += row.count;
+        const key = statusMap[row._id];
+        if (key) listingsByStatus[key] = row.count;
+      }
 
-      // Get orders
-      const orders = await Order.find({ sellerId });
-      const completedOrders = orders.filter(o => o.status === OrderStatus.COMPLETED);
+      // Process order aggregation
+      let totalSales = 0;
+      let totalRevenue = 0;
+      let totalOrders = 0;
+      for (const row of orderAgg) {
+        totalOrders += row.count;
+        if (row._id === OrderStatus.COMPLETED) {
+          totalSales = row.count;
+          totalRevenue = row.revenue;
+        }
+      }
 
-      // Revenue calculation
-      const totalRevenue = completedOrders.reduce((sum, order) => {
-        const sellerReceived = order.financials.itemPrice - order.financials.platformFee;
-        return sum + sellerReceived;
-      }, 0);
+      const averageOrderValue = totalSales > 0 ? Math.round(totalRevenue / totalSales) : 0;
+      const conversionRate = totalViews > 0 ? parseFloat(((totalOrders / totalViews) * 100).toFixed(2)) : 0;
 
-      const totalSales = completedOrders.length;
-      const averageOrderValue = totalSales > 0 ? totalRevenue / totalSales : 0;
+      // Fetch listing titles for top listings (separate query, no $lookup)
+      const topListingIds = topListingsAgg.map((r: any) => r._id);
+      const topListingDocs = topListingIds.length > 0
+        ? await Listing.find({ _id: { $in: topListingIds } }).select("title views").lean()
+        : [];
+      const listingMap: Record<string, { title: string; views: number }> = {};
+      for (const doc of topListingDocs) {
+        listingMap[doc._id.toString()] = { title: doc.title, views: doc.views || 0 };
+      }
 
-      // Conversion rate (orders / views)
-      const conversionRate = totalViews > 0 ? (orders.length / totalViews) * 100 : 0;
-
-      // Top performing listings
-      const topListings = listings
-        .sort((a, b) => (b.views || 0) - (a.views || 0))
-        .slice(0, 5)
-        .map(l => ({
-          id: l._id,
-          title: l.title,
-          views: l.views || 0,
-          status: l.status,
-          price: l.pricing.amount,
-        }));
-
-      // Recent transactions
-      const transactions = await Transaction.find({ userId: sellerId })
-        .sort({ createdAt: -1 })
-        .limit(10);
+      const mappedTopListings = topListingsAgg.map((l: any) => ({
+        id: l._id,
+        title: listingMap[l._id.toString()]?.title || 'Unknown',
+        views: listingMap[l._id.toString()]?.views || 0,
+        sales: l.sales,
+        revenue: l.revenue,
+      }));
 
       res.json({
         success: true,
         data: {
           overview: {
-            totalListings: listings.length,
+            totalListings,
             totalViews,
             totalSales,
             totalRevenue,
-            averageOrderValue: Math.round(averageOrderValue),
-            conversionRate: parseFloat(conversionRate.toFixed(2)),
+            averageOrderValue,
+            conversionRate,
           },
           listingsByStatus,
-          topListings,
-          recentTransactions: transactions,
+          topListings: mappedTopListings,
+          recentTransactions: [], // fetched separately by FE from /orders
         },
       });
     } catch (error: any) {
@@ -92,49 +144,46 @@ export class AnalyticsController {
   static async getSellerPerformance(req: any, res: Response) {
     try {
       const sellerId = req.user?.id;
-      const { period = "30d" } = req.query; // 7d, 30d, 90d
+      const { period = "30d" } = req.query;
 
       if (!sellerId) {
         return res.status(401).json({ success: false, message: "Unauthorized" });
       }
 
-      // Calculate date range
       const days = period === "7d" ? 7 : period === "90d" ? 90 : 30;
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
 
-      // Get orders in period
-      const orders = await Order.find({
-        sellerId,
-        createdAt: { $gte: startDate },
-      }).sort({ createdAt: 1 });
-
-      // Group by date
-      const dailyStats: any = {};
-      orders.forEach(order => {
-        const date = order.createdAt.toISOString().split("T")[0];
-        if (!dailyStats[date]) {
-          dailyStats[date] = {
-            date,
-            orders: 0,
-            revenue: 0,
-          };
-        }
-        dailyStats[date].orders += 1;
-        if (order.status === OrderStatus.COMPLETED) {
-          const sellerReceived = order.financials.itemPrice - order.financials.platformFee;
-          dailyStats[date].revenue += sellerReceived;
-        }
-      });
-
-      const performanceData = Object.values(dailyStats);
+      // Use aggregation to group by date in DB instead of loading all orders
+      const performanceData = await Order.aggregate([
+        {
+          $match: {
+            sellerId: new Types.ObjectId(sellerId),
+            createdAt: { $gte: startDate },
+          },
+        },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+            orders: { $sum: 1 },
+            revenue: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$status", OrderStatus.COMPLETED] },
+                  { $subtract: ["$financials.itemPrice", "$financials.platformFee"] },
+                  0,
+                ],
+              },
+            },
+          },
+        },
+        { $sort: { _id: 1 } },
+        { $project: { _id: 0, date: "$_id", orders: 1, revenue: 1 } },
+      ]);
 
       res.json({
         success: true,
-        data: {
-          period,
-          performanceData,
-        },
+        data: { period, performanceData },
       });
     } catch (error: any) {
       res.status(500).json({ success: false, message: error.message });

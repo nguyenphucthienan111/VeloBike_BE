@@ -36,7 +36,16 @@ export interface IOrder extends MongooseDocument {
 
   status: OrderStatus;
 
+  inspectionRequired: boolean;
+
   shippingAddress?: IShippingAddress;
+
+  shippingInfo?: {
+    carrier?: string;
+    trackingNumber?: string;
+    trackingUrl?: string;
+    shippedAt?: Date;
+  };
 
   financials: {
     totalAmount: number;
@@ -70,6 +79,8 @@ const OrderSchema = new Schema<IOrder>(
       default: OrderStatus.CREATED,
     },
 
+    inspectionRequired: { type: Boolean, default: true },
+
     shippingAddress: {
       fullName: String,
       phone: String,
@@ -78,6 +89,13 @@ const OrderSchema = new Schema<IOrder>(
       city: String,
       province: String,
       zipCode: String,
+    },
+
+    shippingInfo: {
+      carrier: String,
+      trackingNumber: String,
+      trackingUrl: String,
+      shippedAt: Date,
     },
 
     financials: {

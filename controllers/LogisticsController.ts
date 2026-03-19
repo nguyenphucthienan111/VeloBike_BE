@@ -60,10 +60,15 @@ export class LogisticsController {
       );
 
       // Update Order Status using OrderService
-      // Note: In a real scenario, we might have a specific field for tracking number
       await OrderService.markShipped(orderId, sellerId);
       
-      // Save tracking info to order note (simplified)
+      // Save tracking info to shippingInfo field
+      order.shippingInfo = {
+        carrier: shipment.carrier,
+        trackingNumber: shipment.trackingNumber,
+        trackingUrl: `https://tracking.ghn.dev/?order_code=${shipment.trackingNumber}`,
+        shippedAt: new Date(),
+      };
       order.timeline.push({
           status: order.status,
           timestamp: new Date(),

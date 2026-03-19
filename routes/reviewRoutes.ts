@@ -82,29 +82,7 @@ export const reviewRoutes = Router();
  *         description: Order not found
  */
 reviewRoutes.post("/", protect, ReviewController.createReview as any);
-
-/**
- * @swagger
- * /api/reviews/{userId}:
- *   get:
- *     summary: Get reviews for a user
- *     tags: [Reviews]
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *       - in: query
- *         name: page
- *         schema:
- *           type: number
- *       - in: query
- *         name: limit
- *         schema:
- *           type: number
- *     responses:
- *       200:
- *         description: Reviews list
- */
+reviewRoutes.get("/my-reviews", protect, ReviewController.getMyReviews as any);
+reviewRoutes.get("/check/:orderId", protect, ReviewController.checkReviewed as any);
+reviewRoutes.post("/:reviewId/reply", protect, ReviewController.replyReview as any);
 reviewRoutes.get("/:userId", ReviewController.getUserReviews as any);

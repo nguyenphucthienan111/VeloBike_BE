@@ -76,7 +76,6 @@ const PORT = process.env.PORT || 5000;
 if (process.env.NODE_ENV !== 'test') {
   CacheService.init().catch(console.error);
   AlertService.startAlertProcessing();
-  SubscriptionService.initializeDefaultPlans().catch(console.error);
   AutoApprovalService.startCron();
   initFirebase();
 }

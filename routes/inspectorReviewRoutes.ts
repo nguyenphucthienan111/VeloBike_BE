@@ -98,3 +98,4 @@ inspectorReviewRoutes.get("/inspector/:inspectorId", InspectorReviewController.g
  *         description: Review status
  */
 inspectorReviewRoutes.get("/check/:inspectionId", protect, InspectorReviewController.checkReviewed as any);
+inspectorReviewRoutes.get("/check-by-order/:orderId", protect, InspectorReviewController.checkReviewedByOrder as any);

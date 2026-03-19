@@ -386,6 +386,7 @@ adminRoutes.delete("/brands/:id", BrandController.delete as any);
  *         description: Order not found
  */
 adminRoutes.put("/orders/:id/payout", protect, authorize(UserRole.ADMIN), AdminController.releasePayout as any);
+adminRoutes.put("/orders/:id/assign-inspector", protect, authorize(UserRole.ADMIN), AdminController.assignInspector as any);
 
 /**
  * @swagger

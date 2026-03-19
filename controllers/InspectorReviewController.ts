@@ -166,4 +166,18 @@ export class InspectorReviewController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  // GET /api/inspector-reviews/check-by-order/:orderId - check by orderId
+  static async checkReviewedByOrder(req: any, res: any) {
+    try {
+      const { orderId } = req.params;
+      const reviewerId = req.user.id;
+      const inspection = await Inspection.findOne({ orderId });
+      if (!inspection) return res.json({ success: true, hasReviewed: false });
+      const existing = await InspectorReview.findOne({ inspectionId: inspection._id, reviewerId });
+      res.json({ success: true, hasReviewed: !!existing });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }

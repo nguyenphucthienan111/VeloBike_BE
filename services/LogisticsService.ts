@@ -56,16 +56,19 @@ export class LogisticsService {
     pickupAddress: any,
     deliveryAddress: any
   ): Promise<{ trackingNumber: string; carrier: string }> {
-    // Mock tracking number generation
-    const trackingNumber = `TRK-${Math.floor(Math.random() * 1000000)}`;
-    const carrier = serviceId.startsWith("GHN") ? "Giao Hàng Nhanh" : "Viettel Post";
-
-    console.log(`Shipment created for Order ${orderId} via ${carrier}`);
+    const trackingNumber = `TRK-${Math.floor(Math.random() * 1000000).toString().padStart(6, '0')}`;
     
-    return {
-      trackingNumber,
-      carrier,
+    const carrierMap: Record<string, string> = {
+      GHN_STD: "Giao Hàng Nhanh",
+      GHTK_STD: "Giao Hàng Tiết Kiệm",
+      VTP_FAST: "Viettel Post",
+      GRAB_EXPRESS: "GrabExpress",
     };
+    const carrier = carrierMap[serviceId] || serviceId;
+
+    console.log(`Shipment created for Order ${orderId} via ${carrier}: ${trackingNumber}`);
+    
+    return { trackingNumber, carrier };
   }
 
   /**

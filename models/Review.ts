@@ -12,7 +12,9 @@ export interface IReview extends MongooseDocument {
     shipping: number;
     packaging: number;
   };
-  type: "SELLER" | "BUYER"; // Review from who to whom
+  type: "SELLER" | "BUYER";
+  reply?: string;
+  replyDate?: Date;
   createdAt: Date;
 }
 
@@ -30,6 +32,8 @@ const ReviewSchema = new Schema<IReview>(
       packaging: { type: Number, min: 1, max: 5, default: 5 },
     },
     type: { type: String, enum: ["SELLER", "BUYER"], required: true },
+    reply: { type: String },
+    replyDate: { type: Date },
   },
   { timestamps: true }
 );

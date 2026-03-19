@@ -414,21 +414,65 @@ export class PaymentService {
   }
 
   /**
-   * Find nearest available inspector
-   * For now, returns first available inspector. In production, use geolocation matching.
+   * Find nearest available inspector based on seller's location
+   * Matches by province first, then city, then any available inspector
    */
   private static async findNearestInspector(order: any): Promise<any> {
     try {
-      // Find available inspectors (active, not banned)
-      const inspectors = await User.find({
-        role: UserRole.INSPECTOR,
-        isActive: true,
-      }).limit(1);
+      // Inspector goes to seller's location to inspect the bike
+      const seller = await User.findById(order.sellerId).select("address");
+      const sellerProvince = seller?.address?.province;
+      const sellerCity = seller?.address?.city;
 
-      return inspectors.length > 0 ? inspectors[0] : null;
+      const baseQuery = { role: UserRole.INSPECTOR, isActive: true };
+
+      // 1. Try same province
+      if (sellerProvince) {
+        const sameProvince = await User.find({
+          ...baseQuery,
+          "address.province": sellerProvince,
+        });
+        if (sameProvince.length > 0) {
+          // Among same-province inspectors, pick the one with fewest active orders
+          return await this.pickLeastBusyInspector(sameProvince);
+        }
+      }
+
+      // 2. Try same city
+      if (sellerCity) {
+        const sameCity = await User.find({
+          ...baseQuery,
+          "address.city": sellerCity,
+        });
+        if (sameCity.length > 0) {
+          return await this.pickLeastBusyInspector(sameCity);
+        }
+      }
+
+      // 3. Fallback: any available inspector with fewest active orders
+      const allInspectors = await User.find(baseQuery);
+      if (allInspectors.length === 0) return null;
+      return await this.pickLeastBusyInspector(allInspectors);
     } catch (error) {
       console.error("Error finding inspector:", error);
       return null;
     }
+  }
+
+  /**
+   * Among a list of inspectors, pick the one with fewest IN_INSPECTION orders
+   */
+  private static async pickLeastBusyInspector(inspectors: any[]): Promise<any> {
+    const counts = await Promise.all(
+      inspectors.map(async (inspector) => {
+        const activeCount = await Order.countDocuments({
+          inspectorId: inspector._id,
+          status: OrderStatus.IN_INSPECTION,
+        });
+        return { inspector, activeCount };
+      })
+    );
+    counts.sort((a, b) => a.activeCount - b.activeCount);
+    return counts[0].inspector;
   }
 }

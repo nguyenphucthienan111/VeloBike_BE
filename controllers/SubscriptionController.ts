@@ -49,6 +49,16 @@ export class SubscriptionController {
               limit: canCreate.limit,
               canCreate: canCreate.canCreate,
             },
+            boosts: {
+              used: subscription.boostsUsedThisWeek,
+              limit: plan?.boostPerWeek ?? 0,
+              remaining: Math.max(0, (plan?.boostPerWeek ?? 0) - subscription.boostsUsedThisWeek),
+            },
+            inspections: {
+              used: subscription.inspectionsUsedThisMonth,
+              limit: plan?.freeInspectionsPerMonth ?? 0,
+              remaining: Math.max(0, (plan?.freeInspectionsPerMonth ?? 0) - subscription.inspectionsUsedThisMonth),
+            },
           },
         },
       });

@@ -134,11 +134,13 @@ export class OrderService {
       const hasFreeInspection = await SubscriptionService.canUseFreeInspection(listing.sellerId.toString());
       if (hasFreeInspection) {
         finalInspectionFee = 0; // Free inspection for this seller
-        console.log(`Free inspection applied for seller ${listing.sellerId}`);
+        // Increment immediately so quota is consumed at order creation
+        await SubscriptionService.incrementInspectionCount(listing.sellerId.toString());
+        console.log(`Free inspection applied and quota decremented for seller ${listing.sellerId}`);
       }
     }
     
-    const shippingFee = 150000; // Example: VND
+    const shippingFee = 150000; // Standard shipping fee (VND)
     const platformFee = Math.ceil(listing.pricing.amount * commissionRate); // Dynamic based on subscription
 
     const order = new Order({
@@ -146,6 +148,7 @@ export class OrderService {
       buyerId: new Types.ObjectId(buyerId),
       sellerId: listing.sellerId,
       status: OrderStatus.CREATED,
+      inspectionRequired: inspectionRequired,
       financials: {
         itemPrice: listing.pricing.amount,
         inspectionFee: inspectionRequired ? finalInspectionFee : 0,
@@ -229,12 +232,6 @@ export class OrderService {
       undefined,
       "Inspection passed"
     );
-
-    // Increment inspection count if it was free
-    if (order.financials.inspectionFee === 0) {
-      await SubscriptionService.incrementInspectionCount(order.sellerId.toString());
-      console.log(`Free inspection used for seller ${order.sellerId}`);
-    }
 
     return order;
   }
@@ -366,10 +363,10 @@ export class OrderService {
       });
     }
 
-    // Create PLATFORM_FEE transaction (for tracking against seller)
+    // Create COMMISSION_DEBIT transaction (tracking deduction from seller's perspective)
     await Transaction.create({
       userId: order.sellerId,
-      type: "PLATFORM_FEE",
+      type: "COMMISSION_DEBIT",
       amount: platformFee,
       status: "COMPLETED",
       relatedOrderId: order._id,
@@ -382,32 +379,31 @@ export class OrderService {
       },
     });
 
-    // Credit Platform Account (if configured)
-    // Platform receives: platformFee + shippingFee
-    const platformRevenue = platformFee + order.financials.shippingFee;
+    // Record platform commission revenue (always, regardless of PLATFORM_ACCOUNT_ID)
+    await Transaction.create({
+      userId: order.sellerId, // linked to seller's order for traceability
+      type: "PLATFORM_FEE",
+      amount: platformFee,
+      status: "COMPLETED",
+      relatedOrderId: order._id,
+      description: `Phí hoa hồng nền tảng ${commissionPercent}% (gói ${planName}) cho đơn hàng #${order._id}`,
+      metadata: {
+        breakdown: {
+          platformFee,
+          commissionRate,
+          commissionPercent,
+          planName,
+          itemPrice,
+        },
+      },
+    });
+
+    // Credit Platform Account wallet (if configured)
     if (PLATFORM_ACCOUNT_ID) {
+      const platformRevenue = platformFee + order.financials.shippingFee;
       await User.findByIdAndUpdate(PLATFORM_ACCOUNT_ID, {
         $inc: { "wallet.balance": platformRevenue },
       });
-
-      // Create transaction for platform revenue
-      await Transaction.create({
-        userId: PLATFORM_ACCOUNT_ID,
-        type: "PLATFORM_FEE",
-        amount: platformRevenue,
-        status: "COMPLETED",
-        relatedOrderId: order._id,
-        description: `Platform revenue for order #${order._id} (fee: ${platformFee}, shipping: ${order.financials.shippingFee})`,
-        metadata: {
-          breakdown: {
-            platformFee,
-            shippingFee: order.financials.shippingFee,
-            totalRevenue: platformRevenue,
-          },
-        },
-      });
-    } else {
-      console.warn(`[PLATFORM] No PLATFORM_ACCOUNT_ID configured. Platform fee ${platformRevenue} VND not credited to any account.`);
     }
 
     // Update original PAYMENT_HOLD transaction metadata

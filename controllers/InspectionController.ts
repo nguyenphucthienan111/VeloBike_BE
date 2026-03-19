@@ -611,8 +611,8 @@ export class InspectionController {
         inspectorId: inspectorId,
       })
         .populate("listingId", "title generalInfo media")
-        .populate("buyerId", "fullName")
-        .populate("sellerId", "fullName")
+        .populate("buyerId", "fullName email phone")
+        .populate("sellerId", "fullName email phone address")
         .sort({ createdAt: -1 })
         .skip((Number(page) - 1) * Number(limit))
         .limit(Number(limit));

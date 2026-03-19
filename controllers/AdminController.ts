@@ -4,6 +4,7 @@ import { Listing, ListingStatus } from "../models/Listing";
 import { Order, OrderStatus } from "../models/Order";
 import { Dispute } from "../models/Dispute";
 import { Review } from "../models/Review";
+import { Transaction } from "../models/Transaction";
 import mongoose from "mongoose";
 
 export class AdminController {
@@ -13,25 +14,77 @@ export class AdminController {
    */
   static async getDashboard(req: Request, res: Response) {
     try {
-      const stats = await Promise.all([
+      const [
+        totalUsers,
+        totalListings,
+        totalOrders,
+        commissionRevenueAgg,
+        openDisputes,
+        pendingListings,
+        pendingWithdrawals,
+        pendingKyc,
+        recentOrders,
+        ordersByStatus,
+        subscriptionRevenueAgg,
+        pendingCommissionAgg,
+      ] = await Promise.all([
         User.countDocuments(),
         Listing.countDocuments(),
         Order.countDocuments(),
-        Order.aggregate([
-          { $match: { status: OrderStatus.COMPLETED } },
-          { $group: { _id: null, totalRevenue: { $sum: "$financials.platformFee" } } },
+        // Commission revenue: PLATFORM_FEE transactions (from completed orders)
+        Transaction.aggregate([
+          { $match: { type: "PLATFORM_FEE", status: "COMPLETED" } },
+          { $group: { _id: null, total: { $sum: "$amount" } } },
         ]),
         Dispute.countDocuments({ status: "OPEN" }),
+        Listing.countDocuments({ status: "PENDING_APPROVAL" }),
+        (await import("../models/Withdrawal")).Withdrawal.countDocuments({ status: "PENDING" }),
+        User.countDocuments({ kycStatus: "PENDING", role: { $in: ["SELLER", "INSPECTOR"] } }),
+        Order.find()
+          .sort({ _id: -1 })
+          .limit(5)
+          .populate("buyerId", "fullName")
+          .populate("sellerId", "fullName")
+          .select("status financials createdAt buyerId sellerId"),
+        Order.aggregate([
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+        // Subscription revenue: SUBSCRIPTION_PAYMENT transactions
+        Transaction.aggregate([
+          { $match: { type: "SUBSCRIPTION_PAYMENT", status: "COMPLETED" } },
+          { $group: { _id: null, total: { $sum: "$amount" } } },
+        ]),
+        // Pending commission: platformFee from DELIVERED orders (not yet released)
+        Order.aggregate([
+          { $match: { status: "DELIVERED" } },
+          { $group: { _id: null, total: { $sum: "$financials.platformFee" } } },
+        ]),
       ]);
+
+      const commissionRevenue = commissionRevenueAgg[0]?.total || 0;
+      const pendingCommission = pendingCommissionAgg[0]?.total || 0;
+      const subscriptionRevenue = subscriptionRevenueAgg[0]?.total || 0;
+      const totalRevenue = commissionRevenue + subscriptionRevenue;
 
       res.status(200).json({
         success: true,
         data: {
-          totalUsers: stats[0],
-          totalListings: stats[1],
-          totalOrders: stats[2],
-          totalRevenue: stats[3][0]?.totalRevenue || 0,
-          openDisputes: stats[4],
+          totalUsers,
+          totalListings,
+          totalOrders,
+          totalRevenue,
+          commissionRevenue,
+          pendingCommission,
+          subscriptionRevenue,
+          openDisputes,
+          pendingListings,
+          pendingWithdrawals,
+          pendingKyc,
+          recentOrders,
+          ordersByStatus: ordersByStatus.reduce((acc: any, s: any) => {
+            acc[s._id] = s.count;
+            return acc;
+          }, {}),
         },
       });
     } catch (error: any) {
@@ -278,8 +331,9 @@ export class AdminController {
 
       const orders = await Order.find(query)
         .populate("buyerId", "fullName email")
-        .populate("sellerId", "fullName email")
+        .populate("sellerId", "fullName email phone address")
         .populate("listingId", "title")
+        .populate("inspectorId", "fullName email address")
         .sort({ createdAt: -1 })
         .skip((Number(page) - 1) * Number(limit))
         .limit(Number(limit));
@@ -300,6 +354,44 @@ export class AdminController {
       res
         .status(500)
         .json({ success: false, message: "Error fetching orders", error: error.message });
+    }
+  }
+
+  /**
+   * Assign or reassign inspector to an order
+   * PUT /api/admin/orders/:id/assign-inspector
+   */
+  static async assignInspector(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { inspectorId } = req.body;
+
+      if (!inspectorId) {
+        return res.status(400).json({ success: false, message: "inspectorId is required" });
+      }
+
+      const inspector = await User.findOne({ _id: inspectorId, role: UserRole.INSPECTOR });
+      if (!inspector) {
+        return res.status(404).json({ success: false, message: "Inspector not found" });
+      }
+
+      const order = await Order.findByIdAndUpdate(
+        id,
+        { inspectorId },
+        { new: true }
+      )
+        .populate("buyerId", "fullName email")
+        .populate("sellerId", "fullName email")
+        .populate("listingId", "title")
+        .populate("inspectorId", "fullName email");
+
+      if (!order) {
+        return res.status(404).json({ success: false, message: "Order not found" });
+      }
+
+      res.status(200).json({ success: true, message: "Inspector assigned", data: order });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 
@@ -355,7 +447,7 @@ export class AdminController {
         data: {
           platformFeePercentage: 10,
           inspectionFee: 500000,
-          shippingFee: 150000,
+          shippingFee: 1000,
           minimumBikePrice: 500000,
           maximumBikePrice: 500000000,
         },

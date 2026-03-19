@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export interface ITransaction extends Document {
   userId: mongoose.Types.ObjectId;
-  type: "DEPOSIT" | "WITHDRAW" | "PAYMENT_HOLD" | "PAYMENT_RELEASE" | "REFUND" | "PLATFORM_FEE" | "INSPECTION_FEE";
+  type: "DEPOSIT" | "WITHDRAW" | "PAYMENT_HOLD" | "PAYMENT_RELEASE" | "REFUND" | "PLATFORM_FEE" | "INSPECTION_FEE" | "COMMISSION_DEBIT" | "SUBSCRIPTION_PAYMENT";
   amount: number;
   status: "PENDING" | "COMPLETED" | "FAILED" | "CANCELLED";
   relatedOrderId?: mongoose.Types.ObjectId;
@@ -24,7 +24,7 @@ const TransactionSchema: Schema = new Schema(
     },
     type: {
       type: String,
-      enum: ["DEPOSIT", "WITHDRAW", "PAYMENT_HOLD", "PAYMENT_RELEASE", "REFUND", "PLATFORM_FEE", "INSPECTION_FEE"],
+      enum: ["DEPOSIT", "WITHDRAW", "PAYMENT_HOLD", "PAYMENT_RELEASE", "REFUND", "PLATFORM_FEE", "INSPECTION_FEE", "COMMISSION_DEBIT", "SUBSCRIPTION_PAYMENT"],
       required: true,
       index: true,
     },

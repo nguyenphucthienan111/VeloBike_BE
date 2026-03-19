@@ -247,7 +247,7 @@ export class SubscriptionService {
     if (plan.price > 0) {
       await Transaction.create({
         userId: sellerId,
-        type: "PLATFORM_FEE",
+        type: "SUBSCRIPTION_PAYMENT",
         amount: plan.price,
         status: "COMPLETED",
         description: `Subscription: ${plan.displayName}`,
