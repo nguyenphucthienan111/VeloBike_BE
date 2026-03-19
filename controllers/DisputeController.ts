@@ -190,21 +190,112 @@ export class DisputeController {
 
       await dispute.save();
 
-      // Handle compensation — deduct from seller, credit to buyer
-      if (compensationAmount && compensationAmount > 0) {
-        const order = await Order.findById(dispute.orderId);
-        const recipient = await User.findById(dispute.claimantId);
+      // Handle compensation — phân phối từ escrow
+      const order = await Order.findById(dispute.orderId);
 
-        if (recipient) {
-          // If order exists and is COMPLETED, claw back from seller
-          if (order && order.status === "COMPLETED") {
+      if (order) {
+        const { itemPrice, platformFee, inspectionFee, shippingFee } = order.financials;
+        const refund = compensationAmount || 0;
+
+        if (order.status === OrderStatus.DISPUTED) {
+          // Tiền vẫn trong escrow — phân phối từ escrow ra
+          const sellerPayout = Math.max(0, itemPrice - platformFee - refund);
+
+          // 1. Hoàn tiền cho Buyer (nếu có)
+          if (refund > 0) {
+            await User.findByIdAndUpdate(dispute.claimantId, {
+              $inc: { "wallet.balance": refund },
+            });
+            await Transaction.create({
+              userId: dispute.claimantId,
+              type: "REFUND",
+              amount: refund,
+              status: "COMPLETED",
+              relatedOrderId: order._id,
+              description: `Dispute refund for order #${order._id} — dispute #${dispute._id}`,
+              metadata: { disputeId: dispute._id },
+            });
+          }
+
+          // 2. Trả tiền cho Seller (phần còn lại sau khi trừ refund + commission)
+          if (sellerPayout > 0) {
+            await User.findByIdAndUpdate(order.sellerId, {
+              $inc: { "wallet.balance": sellerPayout },
+            });
+            await Transaction.create({
+              userId: order.sellerId,
+              type: "PAYMENT_RELEASE",
+              amount: sellerPayout,
+              status: "COMPLETED",
+              relatedOrderId: order._id,
+              description: `Dispute settlement payout for order #${order._id} — refund ${refund.toLocaleString("vi-VN")}đ to buyer, platform fee ${platformFee.toLocaleString("vi-VN")}đ deducted`,
+              metadata: { disputeId: dispute._id, refundAmount: refund, platformFee },
+            });
+          }
+
+          // 3. Ghi nhận platform commission
+          if (platformFee > 0) {
+            await Transaction.create({
+              userId: order.sellerId,
+              type: "PLATFORM_FEE",
+              amount: platformFee,
+              status: "COMPLETED",
+              relatedOrderId: order._id,
+              description: `Platform commission for order #${order._id} (dispute settlement)`,
+              metadata: { disputeId: dispute._id },
+            });
+          }
+
+          // 4. Trả inspector fee nếu chưa được trả
+          if (order.inspectorId) {
+            const existingInspectorTx = await Transaction.findOne({
+              relatedOrderId: order._id,
+              type: "INSPECTION_FEE",
+              userId: order.inspectorId,
+            });
+            if (!existingInspectorTx) {
+              const INSPECTOR_BASE_FEE = 500000;
+              const inspectorPayout = inspectionFee > 0 ? inspectionFee : INSPECTOR_BASE_FEE;
+              await User.findByIdAndUpdate(order.inspectorId, {
+                $inc: { "wallet.balance": inspectorPayout },
+              });
+              await Transaction.create({
+                userId: order.inspectorId,
+                type: "INSPECTION_FEE",
+                amount: inspectorPayout,
+                status: "COMPLETED",
+                relatedOrderId: order._id,
+                description: `Inspection fee for order #${order._id} (dispute settlement)`,
+                metadata: { disputeId: dispute._id },
+              });
+            }
+          }
+
+          // Cập nhật order status: refund nếu có hoàn tiền, completed nếu deny claim
+          const finalStatus = refund > 0 ? OrderStatus.REFUNDED : OrderStatus.COMPLETED;
+          order.status = finalStatus;
+          order.timeline.push({
+            status: finalStatus,
+            timestamp: new Date(),
+            actorId: new mongoose.Types.ObjectId(adminId),
+            note: refund > 0
+              ? `Dispute resolved — refund ${refund.toLocaleString("vi-VN")}đ to buyer, ${sellerPayout.toLocaleString("vi-VN")}đ to seller`
+              : `Dispute resolved — claim denied, full payout ${sellerPayout.toLocaleString("vi-VN")}đ to seller`,
+          } as any);
+          await order.save();
+
+          if (order.listingId) {
+            await Listing.findByIdAndUpdate(order.listingId, { status: "SOLD" });
+          }
+
+        } else if (order.status === OrderStatus.COMPLETED) {
+          // Order đã complete — clawback từ seller wallet
+          if (refund > 0) {
             const seller = await User.findById(order.sellerId);
             if (seller) {
-              const clawback = Math.min(compensationAmount, seller.wallet.balance);
+              const clawback = Math.min(refund, seller.wallet.balance);
               seller.wallet.balance -= clawback;
               await seller.save();
-
-              // Record clawback transaction
               await Transaction.create({
                 userId: order.sellerId,
                 type: "REFUND",
@@ -216,44 +307,31 @@ export class DisputeController {
               });
             }
 
-            // Update order status to REFUNDED
+            const buyer = await User.findById(dispute.claimantId);
+            if (buyer) {
+              buyer.wallet.balance += refund;
+              await buyer.save();
+              await Transaction.create({
+                userId: dispute.claimantId,
+                type: "REFUND",
+                amount: refund,
+                status: "COMPLETED",
+                relatedOrderId: order._id,
+                description: `Dispute refund for order #${order._id} — dispute #${dispute._id}`,
+                metadata: { disputeId: dispute._id },
+              });
+            }
+
             order.status = OrderStatus.REFUNDED;
             order.timeline.push({
               status: OrderStatus.REFUNDED,
               timestamp: new Date(),
               actorId: new mongoose.Types.ObjectId(adminId),
-              note: `Dispute resolved — refund ${compensationAmount} VND to buyer`,
+              note: `Dispute resolved — clawback ${refund.toLocaleString("vi-VN")}đ from seller`,
             } as any);
             await order.save();
-
-            // Mark listing as SOLD — dispute means transaction is done regardless of outcome
-            if (order.listingId) {
-              await Listing.findByIdAndUpdate(order.listingId, { status: "SOLD" });
-            }
           }
-
-          // Credit buyer
-          const oldBalance = recipient.wallet.balance;
-          recipient.wallet.balance += compensationAmount;
-          await recipient.save();
-
-          // Record refund transaction for buyer
-          await Transaction.create({
-            userId: dispute.claimantId,
-            type: "REFUND",
-            amount: compensationAmount,
-            status: "COMPLETED",
-            relatedOrderId: dispute.orderId,
-            description: `Dispute refund for order #${dispute.orderId} — dispute #${dispute._id}`,
-            metadata: { disputeId: dispute._id },
-          });
-
-          console.log(`[DISPUTE REFUND] User ${recipient._id} balance: ${oldBalance} -> ${recipient.wallet.balance} (+${compensationAmount})`);
-        } else {
-          console.error(`[DISPUTE REFUND ERROR] Recipient not found: ${dispute.claimantId}`);
         }
-      } else {
-        console.log(`[DISPUTE REFUND] No compensation amount specified: ${compensationAmount}`);
       }
 
       res.status(200).json({

@@ -6,6 +6,7 @@ import mongoose, { Types } from "mongoose";
 
 import { NotificationService } from "./NotificationService";
 import { SubscriptionService } from "./SubscriptionService";
+import { ShippingService } from "./ShippingService";
 
 // Platform account ID - should be set in .env or created during system setup
 const PLATFORM_ACCOUNT_ID = process.env.PLATFORM_ACCOUNT_ID || null;
@@ -114,7 +115,8 @@ export class OrderService {
     listingId: string,
     buyerId: string,
     inspectionRequired: boolean = true,
-    inspectionFee: number = 500000
+    inspectionFee: number = 500000,
+    buyerCity: string = ""
   ): Promise<IOrder> {
     const listing = await Listing.findById(listingId);
     if (!listing) {
@@ -140,7 +142,11 @@ export class OrderService {
       }
     }
     
-    const shippingFee = 150000; // Standard shipping fee (VND)
+    const weightKg = (listing as any).specs?.weight ?? 10;
+    const seller = await User.findById(listing.sellerId).select("address").lean();
+    const sellerCity = (seller as any)?.address?.city || (seller as any)?.address?.province || "Hà Nội";
+    const shippingBreakdown = await ShippingService.calculate(sellerCity, buyerCity || sellerCity, weightKg);
+    const shippingFee = shippingBreakdown.total;
     const platformFee = Math.ceil(listing.pricing.amount * commissionRate); // Dynamic based on subscription
 
     const order = new Order({
@@ -346,20 +352,23 @@ export class OrderService {
     });
 
     // Credit Inspector (if applicable)
-    if (order.inspectorId && inspectionFee > 0) {
-      // Create INSPECTION_FEE transaction for inspector
+    if (order.inspectorId) {
+      const INSPECTOR_BASE_FEE = 500000; // Standard inspector fee
+      const inspectorPayout = inspectionFee > 0 ? inspectionFee : INSPECTOR_BASE_FEE;
+      const paidByPlatform = inspectionFee === 0; // Free inspection — platform covers it
+
       await Transaction.create({
         userId: order.inspectorId,
         type: "INSPECTION_FEE",
-        amount: inspectionFee,
+        amount: inspectorPayout,
         status: "COMPLETED",
         relatedOrderId: order._id,
-        relatedInspectionId: order.inspectorId, // Will be updated if we have inspection ID
-        description: `Inspection fee for order #${order._id}`,
+        description: `Inspection fee for order #${order._id}${paidByPlatform ? " (covered by seller's Premium subscription)" : ""}`,
+        metadata: { paidByPlatform },
       });
 
       await User.findByIdAndUpdate(order.inspectorId, {
-        $inc: { "wallet.balance": inspectionFee },
+        $inc: { "wallet.balance": inspectorPayout },
       });
     }
 

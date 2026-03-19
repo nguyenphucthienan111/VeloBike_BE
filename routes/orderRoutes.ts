@@ -5,6 +5,7 @@ import { UserRole } from "../models/User";
 import { OrderStatus } from "../models/Order";
 import { protect, AuthRequest } from "../middleware/authMiddleware";
 import { validationRules, validate } from "../middleware/validationMiddleware";
+import { ShippingService } from "../services/ShippingService";
 
 export const orderRoutes = Router();
 
@@ -122,6 +123,63 @@ const transitionHandler = async (req: any, res: any) => {
  *         description: Unauthorized
  */
 orderRoutes.post("/", protect, validationRules.createOrder, validate, OrderController.create as any);
+
+// GET /api/orders/listing-availability?listingId=... (public, no auth needed)
+orderRoutes.get("/listing-availability", async (req: Request, res: Response) => {
+  try {
+    const { listingId } = req.query as { listingId: string };
+    if (!listingId) return res.status(400).json({ success: false, message: "listingId required" });
+
+    const { Order } = await import("../models/Order");
+    const activeOrder = await Order.findOne({
+      listingId,
+      status: { $nin: ["COMPLETED", "CANCELLED", "REFUNDED"] },
+    }).select("status createdAt").lean();
+
+    if (!activeOrder) {
+      return res.json({ success: true, available: true });
+    }
+
+    // Check if CREATED order is expired (>15 min)
+    if (activeOrder.status === "CREATED") {
+      const ageMs = Date.now() - new Date((activeOrder as any).createdAt).getTime();
+      if (ageMs > 15 * 60 * 1000) {
+        return res.json({ success: true, available: true });
+      }
+    }
+
+    return res.json({ success: true, available: false, orderStatus: activeOrder.status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/orders/shipping-estimate?listingId=...&buyerCity=...&buyerProvince=...
+orderRoutes.get("/shipping-estimate", async (req: Request, res: Response) => {
+  try {
+    const { listingId, buyerCity, buyerProvince } = req.query as Record<string, string>;
+    if (!listingId || (!buyerCity && !buyerProvince)) {
+      return res.status(400).json({ success: false, message: "listingId and buyer location required" });
+    }
+
+    const { Listing } = await import("../models/Listing");
+    const { User } = await import("../models/User");
+
+    const listing = await Listing.findById(listingId).select("sellerId specs location").lean();
+    if (!listing) return res.status(404).json({ success: false, message: "Listing not found" });
+
+    const seller = await User.findById(listing.sellerId).select("address").lean();
+    const sellerCity = (seller as any)?.address?.city || (seller as any)?.address?.province || listing.location?.address || "Hà Nội";
+    const buyerLocation = buyerProvince || buyerCity;
+    const weightKg = (listing as any).specs?.weight ?? 10;
+
+    const breakdown = await ShippingService.calculate(sellerCity, buyerLocation, weightKg);
+
+    res.json({ success: true, data: breakdown });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 /**
  * @swagger
@@ -263,6 +321,9 @@ orderRoutes.get("/:id/timeline", protect, OrderController.getTimeline as any);
  *         description: Order not found
  */
 orderRoutes.put("/:id/status", protect, OrderController.updateStatus as any);
+
+// PUT /api/orders/:id/seller-decision — Seller responds to SUGGEST_ADJUSTMENT
+orderRoutes.put("/:id/seller-decision", protect, OrderController.sellerDecision as any);
 
 /**
  * @swagger

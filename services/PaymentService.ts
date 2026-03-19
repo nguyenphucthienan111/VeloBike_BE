@@ -421,37 +421,36 @@ export class PaymentService {
     try {
       // Inspector goes to seller's location to inspect the bike
       const seller = await User.findById(order.sellerId).select("address");
-      const sellerProvince = seller?.address?.province;
-      const sellerCity = seller?.address?.city;
+      const sellerProvince = seller?.address?.province?.trim().toLowerCase();
+      const sellerCity = seller?.address?.city?.trim().toLowerCase();
 
       const baseQuery = { role: UserRole.INSPECTOR, isActive: true };
+      const allInspectors = await User.find(baseQuery);
+
+      if (allInspectors.length === 0) return null;
+
+      // Normalize helper
+      const norm = (s?: string) => (s || "").trim().toLowerCase();
 
       // 1. Try same province
       if (sellerProvince) {
-        const sameProvince = await User.find({
-          ...baseQuery,
-          "address.province": sellerProvince,
-        });
-        if (sameProvince.length > 0) {
-          // Among same-province inspectors, pick the one with fewest active orders
-          return await this.pickLeastBusyInspector(sameProvince);
-        }
+        const sameProvince = allInspectors.filter(i =>
+          norm(i.address?.province) === sellerProvince ||
+          norm(i.address?.city) === sellerProvince
+        );
+        if (sameProvince.length > 0) return await this.pickLeastBusyInspector(sameProvince);
       }
 
       // 2. Try same city
       if (sellerCity) {
-        const sameCity = await User.find({
-          ...baseQuery,
-          "address.city": sellerCity,
-        });
-        if (sameCity.length > 0) {
-          return await this.pickLeastBusyInspector(sameCity);
-        }
+        const sameCity = allInspectors.filter(i =>
+          norm(i.address?.city) === sellerCity ||
+          norm(i.address?.province) === sellerCity
+        );
+        if (sameCity.length > 0) return await this.pickLeastBusyInspector(sameCity);
       }
 
       // 3. Fallback: any available inspector with fewest active orders
-      const allInspectors = await User.find(baseQuery);
-      if (allInspectors.length === 0) return null;
       return await this.pickLeastBusyInspector(allInspectors);
     } catch (error) {
       console.error("Error finding inspector:", error);

@@ -17,7 +17,7 @@ export class OrderController {
           .json({ success: false, message: "Unauthorized" });
       }
 
-      const { listingId, inspectionRequired = true } = req.body;
+      const { listingId, inspectionRequired = true, buyerCity = "" } = req.body;
 
       if (!listingId) {
         return res
@@ -103,7 +103,9 @@ export class OrderController {
       const order = await OrderService.createOrder(
         listingId,
         buyerId,
-        finalInspectionRequired
+        finalInspectionRequired,
+        500000,
+        buyerCity
       );
 
       res.status(201).json({
@@ -370,6 +372,29 @@ export class OrderController {
       }
 
       order.shippingAddress = shippingAddress;
+
+      // Recalculate shipping fee based on actual buyer city
+      try {
+        const { ShippingService } = await import("../services/ShippingService");
+        const { Listing } = await import("../models/Listing");
+        const { User } = await import("../models/User");
+
+        const listing = await Listing.findById(order.listingId).select("specs sellerId").lean();
+        const seller = await User.findById(order.sellerId).select("address").lean();
+        const sellerCity = (seller as any)?.address?.city || (seller as any)?.address?.province || "Hà Nội";
+        const buyerCity = shippingAddress.province || shippingAddress.city;
+        const weightKg = (listing as any)?.specs?.weight ?? 10;
+
+        const breakdown = await ShippingService.calculate(sellerCity, buyerCity, weightKg);
+        order.financials.shippingFee = breakdown.total;
+        order.financials.totalAmount =
+          order.financials.itemPrice +
+          order.financials.inspectionFee +
+          breakdown.total;
+      } catch (e) {
+        console.warn("Could not recalculate shipping fee:", e);
+      }
+
       await order.save();
 
       res.json({ 
@@ -377,6 +402,89 @@ export class OrderController {
         data: order,
         message: "Cập nhật địa chỉ giao hàng thành công" 
       });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // PUT /api/orders/:id/seller-decision
+  // Seller responds to SUGGEST_ADJUSTMENT verdict: PROCEED or CANCEL
+  static async sellerDecision(req: any, res: any) {
+    try {
+      const { id } = req.params;
+      const { decision } = req.body; // 'PROCEED' | 'CANCEL'
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      if (!['PROCEED', 'CANCEL'].includes(decision)) {
+        return res.status(400).json({ success: false, message: "decision must be PROCEED or CANCEL" });
+      }
+
+      const order = await Order.findById(id);
+      if (!order) {
+        return res.status(404).json({ success: false, message: "Order not found" });
+      }
+
+      // Only seller of this order
+      if (userRole !== UserRole.SELLER || order.sellerId.toString() !== userId) {
+        return res.status(403).json({ success: false, message: "Only the seller can make this decision" });
+      }
+
+      // Order must be IN_INSPECTION
+      if (order.status !== OrderStatus.IN_INSPECTION) {
+        return res.status(400).json({ success: false, message: "Order is not awaiting seller decision" });
+      }
+
+      // Verify there's a SUGGEST_ADJUSTMENT inspection report
+      const { Inspection } = await import("../models/Inspection");
+      const inspection = await Inspection.findOne({ orderId: id, overallVerdict: "SUGGEST_ADJUSTMENT" });
+      if (!inspection) {
+        return res.status(400).json({ success: false, message: "No SUGGEST_ADJUSTMENT inspection found for this order" });
+      }
+
+      const orderService = new OrderService();
+
+      if (decision === 'PROCEED') {
+        // Seller accepts — move to INSPECTION_PASSED
+        await orderService.transitionState(id, OrderStatus.INSPECTION_PASSED, userId, UserRole.SELLER, "Seller chấp nhận điều chỉnh và tiếp tục giao dịch");
+        return res.json({ success: true, message: "Order moved to INSPECTION_PASSED", data: await Order.findById(id) });
+      }
+
+      // CANCEL — refund buyer + pay inspector
+      const { User } = await import("../models/User");
+      const { Transaction } = await import("../models/Transaction");
+
+      const { itemPrice, inspectionFee, shippingFee } = order.financials;
+      // inspectionFee đã trả công cho inspector → buyer chỉ được hoàn itemPrice + shippingFee
+      const refundAmount = itemPrice + shippingFee;
+
+      await Transaction.create({
+        userId: order.buyerId,
+        type: "REFUND",
+        amount: refundAmount,
+        status: "COMPLETED",
+        relatedOrderId: order._id,
+        description: `Hoàn tiền đơn hàng #${order._id} — seller huỷ sau SUGGEST_ADJUSTMENT`,
+      });
+      await User.findByIdAndUpdate(order.buyerId, { $inc: { "wallet.balance": refundAmount } });
+
+      if (order.inspectorId) {
+        const INSPECTOR_BASE_FEE = 500000;
+        const inspectorPayout = inspectionFee > 0 ? inspectionFee : INSPECTOR_BASE_FEE;
+        await Transaction.create({
+          userId: order.inspectorId,
+          type: "INSPECTION_FEE",
+          amount: inspectorPayout,
+          status: "COMPLETED",
+          relatedOrderId: order._id,
+          description: `Phí kiểm định đơn hàng #${order._id} (seller huỷ sau SUGGEST_ADJUSTMENT)`,
+        });
+        await User.findByIdAndUpdate(order.inspectorId, { $inc: { "wallet.balance": inspectorPayout } });
+      }
+
+      await orderService.transitionState(id, OrderStatus.REFUNDED, userId, UserRole.SELLER, "Seller huỷ đơn sau SUGGEST_ADJUSTMENT — đã hoàn tiền buyer");
+
+      return res.json({ success: true, message: "Order cancelled and buyer refunded", data: await Order.findById(id) });
     } catch (error: any) {
       res.status(500).json({ success: false, message: error.message });
     }

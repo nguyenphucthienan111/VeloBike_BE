@@ -384,6 +384,7 @@ export class SubscriptionService {
 
   /**
    * Reset monthly quota if new month
+   * Note: inspectionsUsedThisMonth does NOT reset — it's a fixed quota per subscription period
    */
   private static async resetMonthlyQuotaIfNeeded(subscription: ISellerSubscription): Promise<void> {
     if (!subscription) return;
@@ -391,10 +392,10 @@ export class SubscriptionService {
     const now = new Date();
     const lastReset = new Date(subscription.lastResetDate);
     
-    // Check if it's a new month
+    // Check if it's a new month — only reset listings and boosts, NOT inspections
     if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
       subscription.listingsUsedThisMonth = 0;
-      subscription.inspectionsUsedThisMonth = 0;
+      // inspectionsUsedThisMonth intentionally NOT reset — fixed quota per subscription period
       subscription.lastResetDate = now;
       await subscription.save();
     }

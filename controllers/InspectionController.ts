@@ -2,9 +2,12 @@ import { Request, Response } from "express";
 import { Inspection } from "../models/Inspection";
 import { Order, OrderStatus } from "../models/Order";
 import { Listing, BikeType } from "../models/Listing";
+import { User } from "../models/User";
+import { Transaction } from "../models/Transaction";
 import { OrderService } from "../services/OrderService";
 import { UserRole } from "../models/User";
 import { AuthRequest } from "../middleware/authMiddleware";
+import { NotificationService } from "../services/NotificationService";
 
 /**
  * Grade Mapping theo SRS BikeMarket
@@ -486,6 +489,69 @@ export class InspectionController {
           UserRole.INSPECTOR,
           `Inspection submitted with verdict: ${finalVerdict} (Score: ${finalScore}/10)`
         );
+      }
+
+      // --- Handle FAILED: auto-refund buyer + pay inspector ---
+      if (finalVerdict === "FAILED") {
+        const freshOrder = await Order.findById(orderId);
+        if (freshOrder) {
+          const { itemPrice, inspectionFee, shippingFee } = freshOrder.financials;
+          // inspectionFee đã trả công cho inspector → buyer chỉ được hoàn itemPrice + shippingFee
+          const refundAmount = itemPrice + shippingFee;
+
+          // Refund buyer
+          await Transaction.create({
+            userId: freshOrder.buyerId,
+            type: "REFUND",
+            amount: refundAmount,
+            status: "COMPLETED",
+            relatedOrderId: freshOrder._id,
+            description: `Hoàn tiền đơn hàng #${freshOrder._id} — xe không đạt kiểm định (FAILED)`,
+          });
+          await User.findByIdAndUpdate(freshOrder.buyerId, {
+            $inc: { "wallet.balance": refundAmount },
+          });
+
+          // Pay inspector
+          if (freshOrder.inspectorId) {
+            const INSPECTOR_BASE_FEE = 500000;
+            const inspectorPayout = inspectionFee > 0 ? inspectionFee : INSPECTOR_BASE_FEE;
+            await Transaction.create({
+              userId: freshOrder.inspectorId,
+              type: "INSPECTION_FEE",
+              amount: inspectorPayout,
+              status: "COMPLETED",
+              relatedOrderId: freshOrder._id,
+              description: `Phí kiểm định đơn hàng #${freshOrder._id} (xe FAILED)`,
+            });
+            await User.findByIdAndUpdate(freshOrder.inspectorId, {
+              $inc: { "wallet.balance": inspectorPayout },
+            });
+          }
+
+          // Transition to REFUNDED
+          await orderService.transitionState(
+            orderId,
+            OrderStatus.REFUNDED,
+            inspectorId,
+            UserRole.INSPECTOR,
+            "Tự động hoàn tiền do xe không đạt kiểm định"
+          );
+          nextStatus = OrderStatus.REFUNDED;
+        }
+      }
+
+      // --- Handle SUGGEST_ADJUSTMENT: notify seller ---
+      if (finalVerdict === "SUGGEST_ADJUSTMENT") {
+        const freshOrder = await Order.findById(orderId);
+        if (freshOrder) {
+          await NotificationService.sendNotification(
+            freshOrder.sellerId.toString(),
+            "Yêu cầu điều chỉnh xe",
+            `Inspector đề nghị điều chỉnh xe trước khi giao. Ghi chú: ${inspectorNote || "Xem báo cáo kiểm định"}. Vui lòng vào trang Đơn hàng để xem và quyết định.`,
+            { orderId: freshOrder._id.toString(), verdict: "SUGGEST_ADJUSTMENT" }
+          );
+        }
       }
 
       res.status(201).json({
