@@ -253,6 +253,8 @@ app.use("/api-docs", swaggerUi.serve as any, swaggerUi.setup(swaggerDocs));
 // Database Connection (skip in test environment)
 if (process.env.NODE_ENV !== 'test') {
   const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/velobike";
+  console.log("🔌 Connecting to MongoDB:", MONGO_URI.includes('mongodb+srv') ? '📍 ATLAS' : '💾 LOCAL');
+  console.log("📋 URI:", MONGO_URI);
   mongoose
     .connect(MONGO_URI)
     .then(() => {
