@@ -1,7 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ChatbotConversation } from "../models/ChatbotConversation";
 import { User } from "../models/User";
+import { Listing } from "../models/Listing";
 import { SubscriptionService } from "./SubscriptionService";
+
+const FRONTEND_URL = process.env.CLIENT_URL?.replace(/\/$/, '') || "https://velo-bike-fe.vercel.app";
 
 export class ChatbotService {
   // Initialize Gemini AI - make sure dotenv.config() runs before this
@@ -99,86 +102,123 @@ Hãy trả lời bằng tiếng Việt, thân thiện và chuyên nghiệp. Nế
     }
   }
 
-  static async processMessage(userId: string, message: string): Promise<string> {
+  static async processMessage(userId: string, message: string): Promise<{ reply: string; listings: any[] }> {
     console.log("=== ChatbotService.processMessage START ===");
     console.log("Input:", { userId, message });
     
     try {
       // 1. Save user message to conversation history
-      console.log("Step 1: Saving user message...");
       await this.saveConversation(userId, message, "user");
 
-      // 2. Try Gemini AI FIRST (prioritize AI over keywords)
-      console.log("Step 2: Calling Gemini AI...");
-      console.log("API Key available:", process.env.GEMINI_API_KEY ? "Yes" : "No");
-      console.log("API Key (first 10 chars):", process.env.GEMINI_API_KEY?.substring(0, 10));
-      
+      // 2. Search relevant listings from DB
+      const relevantListings = await this.searchRelevantListings(message);
+      console.log(`Found ${relevantListings.length} relevant listings`);
+
+      // 3. Try Gemini AI
+      console.log("Step 3: Calling Gemini AI...");
       if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "") {
         try {
           const history = await this.getRecentConversation(userId, 5);
-          const contextualPrompt = this.buildEnhancedPrompt(message, history);
-          
-          console.log("Sending to Gemini AI with enhanced prompt...");
-          console.log("Prompt length:", contextualPrompt.length);
+          const contextualPrompt = this.buildEnhancedPrompt(message, history, relevantListings);
           
           const result = await this.model.generateContent(contextualPrompt);
-          const response = result.response;
-          const aiResponse = response.text();
+          const aiResponse = result.response.text();
           
-          console.log("✅ Gemini AI response received:", aiResponse.substring(0, 100) + "...");
+          console.log("✅ Gemini AI response received");
           await this.saveConversation(userId, aiResponse, "bot");
-          return aiResponse;
+          return { reply: aiResponse, listings: relevantListings };
           
         } catch (aiError: any) {
-          console.error("❌ Gemini AI Error:", aiError);
-          console.error("Error details:", {
-            message: aiError.message,
-            status: aiError.status,
-            statusText: aiError.statusText,
-            name: aiError.name
-          });
-          console.log("Falling back to keyword-based responses...");
+          console.error("❌ Gemini AI Error:", aiError.message);
         }
-      } else {
-        console.log("⚠️ No Gemini API key found, using keyword responses only");
       }
 
-      // 3. Fallback to keyword matching when AI fails or unavailable
+      // 4. Fallback keyword response
       const keywordResponse = this.getKeywordResponse(message);
       if (keywordResponse) {
-        console.log("✅ Found keyword response");
         await this.saveConversation(userId, keywordResponse, "bot");
-        return keywordResponse;
+        return { reply: keywordResponse, listings: relevantListings };
       }
 
-      // 4. Final fallback response
-      const fallbackResponse = "Cảm ơn bạn đã liên hệ VeloBike! 🚴‍♂️\n\n" +
-        "Tôi có thể giúp bạn với:\n\n" +
-        "💰 **Định giá xe đạp** - Hỏi về giá xe\n" +
-        "🔍 **Dịch vụ kiểm định** - Hỏi về kiểm định\n" +
-        "🚲 **Bán xe đạp** - Hướng dẫn bán xe\n" +
-        "🛒 **Mua xe đạp** - Hướng dẫn mua xe\n" +
-        "🔒 **An toàn giao dịch** - Hỏi về bảo mật\n\n" +
-        "Hoặc liên hệ:\n" +
-        "📞 **Hotline**: 1900-xxxx (24/7)\n" +
-        "💬 **Chat trực tiếp** trong app VeloBike";
-
+      // 5. Final fallback
+      const fallbackResponse = "Cảm ơn bạn đã liên hệ VeloBike! 🚴‍♂️\n\nTôi có thể giúp bạn tư vấn mua/bán xe đạp, kiểm định, hoặc hướng dẫn sử dụng dịch vụ.\n\nHãy hỏi tôi bất cứ điều gì!";
       await this.saveConversation(userId, fallbackResponse, "bot");
-      console.log("=== ChatbotService.processMessage END ===");
-      return fallbackResponse;
+      return { reply: fallbackResponse, listings: relevantListings };
 
     } catch (error) {
       console.error("Chatbot Service Error:", error);
-      const errorResponse = "Xin lỗi, hệ thống đang gặp sự cố. Vui lòng thử lại sau hoặc liên hệ hotline 1900-xxxx.";
+      const errorResponse = "Xin lỗi, hệ thống đang gặp sự cố. Vui lòng thử lại sau.";
       await this.saveConversation(userId, errorResponse, "bot");
-      return errorResponse;
+      return { reply: errorResponse, listings: [] };
+    }
+  }
+
+  /**
+   * Search listings relevant to user's message
+   */
+  private static async searchRelevantListings(message: string): Promise<any[]> {
+    try {
+      // Remove Vietnamese stopwords and short words
+      const stopwords = new Set(['bạn','có','biết','shop','nào','bán','xe','đạp','trên','hệ','thống','không','tôi','muốn','tìm','mua','một','chiếc','cho','về','và','là','của','với','được','này','đó','hay','hoặc','cũng','thì','mà','để','từ','theo','như','khi','vì','nếu','nhưng','rất','nhiều','ít','hơn','nhất','loại','dòng','model','hãng','brand','giá','price','nguồn','uy','tín']);
+
+      const words = message
+        .replace(/[^\w\sÀ-ỹ]/gi, ' ')
+        .split(/\s+/)
+        .map(w => w.trim())
+        .filter(w => w.length > 2 && !stopwords.has(w.toLowerCase()));
+
+      if (words.length === 0) return [];
+
+      // Build targeted search — exact phrase first, then individual keywords
+      const phraseQuery = message.replace(/[^\w\sÀ-ỹ]/gi, ' ').trim();
+
+      const orConditions: any[] = [
+        { title: { $regex: phraseQuery, $options: 'i' } },
+        { title: { $regex: words.join('|'), $options: 'i' } },
+        { 'generalInfo.brand': { $regex: words.join('|'), $options: 'i' } },
+        { 'generalInfo.model': { $regex: words.join('|'), $options: 'i' } },
+      ];
+
+      const typeMap: Record<string, string> = {
+        'mountain': 'MTB', 'mtb': 'MTB', 'road': 'ROAD', 'gravel': 'GRAVEL',
+        'triathlon': 'TRIATHLON', 'ebike': 'E_BIKE', 'electric': 'E_BIKE', 'e-bike': 'E_BIKE',
+      };
+      const matchedTypes = words.map(k => typeMap[k.toLowerCase()]).filter(Boolean);
+      if (matchedTypes.length > 0) orConditions.push({ type: { $in: matchedTypes } });
+
+      const listings = await Listing.find({ $or: orConditions, status: 'PUBLISHED' })
+        .select('_id title type generalInfo pricing media')
+        .limit(4)
+        .lean();
+
+      // Sort: exact title match first
+      const lowerMsg = message.toLowerCase();
+      listings.sort((a: any, b: any) => {
+        const aMatch = a.title.toLowerCase().includes('specialized') || lowerMsg.includes(a.generalInfo?.brand?.toLowerCase() || '') ? -1 : 0;
+        const bMatch = b.title.toLowerCase().includes('specialized') || lowerMsg.includes(b.generalInfo?.brand?.toLowerCase() || '') ? -1 : 0;
+        return aMatch - bMatch;
+      });
+
+      return listings.map((l: any) => ({
+        id: l._id.toString(),
+        title: l.title,
+        brand: l.generalInfo?.brand || '',
+        model: l.generalInfo?.model || '',
+        type: l.type,
+        price: l.pricing?.amount || 0,
+        image: l.media?.thumbnails?.[0] || '',
+        url: `${FRONTEND_URL}/bike/${l._id}`,
+      }));
+    } catch (err) {
+      console.error('Error searching listings:', err);
+      return [];
     }
   }
 
   /**
    * Build enhanced contextual prompt for Gemini AI with better instructions
    */
-  private static buildEnhancedPrompt(message: string, history: any[]): string {
+  private static buildEnhancedPrompt(message: string, history: any[], listings: any[] = []): string {
     let prompt = `${this.VELOBIKE_CONTEXT}
 
 HƯỚNG DẪN TRẢ LỜI:
@@ -188,8 +228,20 @@ HƯỚNG DẪN TRẢ LỜI:
 - Nếu không chắc chắn, gợi ý liên hệ hotline hoặc sử dụng tính năng trong app
 - Luôn tập trung vào việc giúp khách hàng mua/bán xe đạp an toàn và hiệu quả
 - Đưa ra lời khuyên thực tế và hữu ích
+- Khi có sản phẩm phù hợp từ VeloBike, hãy gợi ý chúng với định dạng đặc biệt bên dưới
 
 `;
+
+    if (listings.length > 0) {
+      const fmt = (n: number) => new Intl.NumberFormat('vi-VN').format(n);
+      prompt += `SẢN PHẨM CÓ SẴN TRÊN VELOBIKE (liên quan đến câu hỏi):\n`;
+      listings.forEach((l, i) => {
+        prompt += `${i + 1}. ${l.title} | Hãng: ${l.brand} | Giá: ${fmt(l.price)}đ\n`;
+      });
+      prompt += `\nHãy đề cập rằng VeloBike đang có những sản phẩm này và khuyến khích người dùng xem trên marketplace.\n\n`;
+    } else {
+      prompt += `LƯU Ý: Không tìm thấy sản phẩm phù hợp trên VeloBike. Hãy gợi ý người dùng tìm kiếm trên marketplace hoặc đề xuất các loại xe tương tự.\n\n`;
+    }
     
     if (history.length > 0) {
       prompt += "LỊCH SỬ TRƯỚC ĐÓ:\n";

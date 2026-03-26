@@ -47,13 +47,14 @@ export class ChatbotController {
       console.log(`Rate limit OK. Remaining: ${rateLimitCheck.remaining === -1 ? 'Unlimited' : rateLimitCheck.remaining}`);
 
       console.log("Calling ChatbotService.processMessage...");
-      const reply = await ChatbotService.processMessage(userId, message);
-      console.log("ChatbotService returned:", reply.substring(0, 100) + "...");
+      const result = await ChatbotService.processMessage(userId, message);
+      console.log("ChatbotService returned reply");
 
       console.log("Sending response...");
       res.status(200).json({
         success: true,
-        reply,
+        reply: result.reply,
+        listings: result.listings,
         remaining: rateLimitCheck.remaining
       });
       console.log("=== ChatbotController.handleWebhook END ===");
