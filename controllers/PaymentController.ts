@@ -24,10 +24,10 @@ export class PaymentController {
       // Define return and cancel URLs
       const returnUrl =
         process.env.PAYMENT_RETURN_URL ||
-        `http://localhost:3000/payment/success`;
+        `https://velo-bike-fe.vercel.app/payment/success`;
       const cancelUrl =
         process.env.PAYMENT_CANCEL_URL ||
-        `http://localhost:3000/payment/cancel`;
+        `https://velo-bike-fe.vercel.app/payment/cancel`;
 
       // Call Real Payment Service
       const { paymentLink, orderCode } = await PaymentService.createPaymentLink(

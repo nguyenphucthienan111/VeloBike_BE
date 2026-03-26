@@ -90,7 +90,15 @@ if (!fs.existsSync(uploadDir)) {
 // Security Middleware (Apply early)
 app.use(securityHeaders);
 app.use(requestSizeLimiter("100mb")); // Limit request size
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    /\.vercel\.app$/,
+    process.env.FRONTEND_URL || "",
+  ].filter(Boolean),
+  credentials: true,
+}));
 app.use(express.json({ limit: '100mb' }) as any);
 app.use(express.urlencoded({ limit: '100mb', extended: true }) as any);
 app.use(sanitizeInput); // Sanitize inputs
