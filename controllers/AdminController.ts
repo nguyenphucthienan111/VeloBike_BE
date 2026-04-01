@@ -170,30 +170,36 @@ export class AdminController {
    * Ban/Suspend user
    * PUT /api/admin/users/:userId/status
    */
-  static async updateUserStatus(req: Request, res: Response) {
+  static async updateUserStatus(req: any, res: Response) {
     try {
       const { userId } = req.params;
       const { isActive } = req.body;
+      const adminId = req.user?.id;
 
-      const user = await User.findByIdAndUpdate(
-        userId,
-        { isActive },
-        { new: true }
-      ).select("-passwordHash");
+      // Prevent admin from disabling themselves
+      if (adminId && adminId === userId) {
+        return res.status(403).json({ success: false, message: "You cannot disable your own account" });
+      }
 
-      if (!user) {
+      // Prevent disabling other admins
+      const targetUser = await User.findById(userId);
+      if (!targetUser) {
         return res.status(404).json({ success: false, message: "User not found" });
       }
+      if (targetUser.role === "ADMIN") {
+        return res.status(403).json({ success: false, message: "Cannot disable an admin account" });
+      }
+
+      targetUser.isActive = isActive;
+      await targetUser.save();
 
       res.status(200).json({
         success: true,
         message: `User ${isActive ? "activated" : "deactivated"}`,
-        data: user,
+        data: targetUser,
       });
     } catch (error: any) {
-      res
-        .status(500)
-        .json({ success: false, message: "Error updating user status", error: error.message });
+      res.status(500).json({ success: false, message: "Error updating user status", error: error.message });
     }
   }
 
