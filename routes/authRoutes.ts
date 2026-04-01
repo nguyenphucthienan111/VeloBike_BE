@@ -75,6 +75,7 @@ authRoutes.post("/register", validationRules.register, validate, AuthController.
  *         description: Invalid or expired code
  */
 authRoutes.post("/verify-email", AuthController.verifyEmail as any);
+authRoutes.post("/resend-otp", AuthController.resendOtp as any);
 
 /**
  * @swagger

@@ -311,6 +311,34 @@ export class AuthController {
     }
   }
 
+  // POST /api/auth/resend-otp
+  // Body: { email }
+  static async resendOtp(req: Request, res: Response) {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ success: false, message: "Email is required" });
+
+      const user = await User.findOne({ email: email.toLowerCase() });
+      if (!user) return res.status(404).json({ success: false, message: "User not found" });
+      if (user.emailVerified) return res.status(400).json({ success: false, message: "Email already verified" });
+
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+      await Otp.findOneAndUpdate(
+        { identifier: `email:${email}` },
+        { code, expiresAt },
+        { upsert: true, new: true }
+      );
+
+      await EmailService.sendVerificationEmail(email, user.fullName, code);
+
+      res.json({ success: true, message: "Verification code resent to your email" });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
   // POST /api/auth/send-otp
   // Body: { phone }
   static async sendOtp(req: Request, res: Response) {
