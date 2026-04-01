@@ -197,7 +197,10 @@ export class DisputeController {
         const { itemPrice, platformFee, inspectionFee, shippingFee } = order.financials;
         const refund = compensationAmount || 0;
 
-        if (order.status === OrderStatus.DISPUTED) {
+        // Check if order was previously COMPLETED (payment already released to seller)
+        const wasCompleted = order.timeline.some((t: any) => t.status === OrderStatus.COMPLETED);
+
+        if (order.status === OrderStatus.DISPUTED && !wasCompleted) {
           // Tiền vẫn trong escrow — phân phối từ escrow ra
           const sellerPayout = Math.max(0, itemPrice - platformFee - refund);
 
@@ -288,7 +291,7 @@ export class DisputeController {
             await Listing.findByIdAndUpdate(order.listingId, { status: "SOLD" });
           }
 
-        } else if (order.status === OrderStatus.COMPLETED) {
+        } else if (order.status === OrderStatus.COMPLETED || (order.status === OrderStatus.DISPUTED && wasCompleted)) {
           // Order đã complete — clawback từ seller wallet
           if (refund > 0) {
             const seller = await User.findById(order.sellerId);
