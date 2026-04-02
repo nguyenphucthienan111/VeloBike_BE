@@ -244,66 +244,15 @@ export class RecommendationController {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
 
-      // Get trending bikes based on:
-      // 1. Recent views
-      // 2. Recent orders
-      // 3. Recency of listing
-      const trendingBikes = await Listing.aggregate([
-        {
-          $match: {
-            status: ListingStatus.PUBLISHED,
-            createdAt: { $gte: startDate }
-          }
-        },
-        {
-          $lookup: {
-            from: "orders",
-            localField: "_id",
-            foreignField: "listingId",
-            as: "recentOrders",
-            pipeline: [
-              { $match: { createdAt: { $gte: startDate } } },
-              { $count: "count" }
-            ]
-          }
-        },
-        {
-          $addFields: {
-            trendingScore: {
-              $add: [
-                // Views score (normalized)
-                { $divide: ["$views", 10] },
-                // Recent orders score
-                { $multiply: [{ $ifNull: [{ $arrayElemAt: ["$recentOrders.count", 0] }, 0] }, 20] },
-                // Recency score (newer listings get bonus)
-                {
-                  $divide: [
-                    { $subtract: [new Date(), "$createdAt"] },
-                    -86400000 // Negative to favor newer listings
-                  ]
-                }
-              ]
-            }
-          }
-        },
-        { $sort: { trendingScore: -1 } },
-        { $limit: Number(limit) },
-        {
-          $lookup: {
-            from: "users",
-            localField: "sellerId",
-            foreignField: "_id",
-            as: "seller",
-            pipeline: [{ $project: { fullName: 1, reputation: 1 } }]
-          }
-        },
-        { $unwind: "$seller" },
-        {
-          $project: {
-            recentOrders: 0 // Remove the lookup field from output
-          }
-        }
-      ]);
+      // Simplified trending — no $lookup to avoid M0 limitations
+      // Sort by views desc, then by recency
+      const trendingBikes = await Listing.find({
+        status: ListingStatus.PUBLISHED,
+      })
+        .sort({ views: -1, createdAt: -1 })
+        .limit(Number(limit))
+        .populate("sellerId", "fullName reputation")
+        .lean();
 
       res.json({
         success: true,
