@@ -143,16 +143,17 @@ export class SubscriptionService {
       subscription.planType !== PlanType.FREE &&
       subscription.endDate < new Date()
     ) {
-      // Subscription expired, downgrade to FREE
-      console.log(`Auto-expiring subscription for seller ${sellerId}`);
       subscription.planType = PlanType.FREE;
       subscription.status = SubscriptionStatus.ACTIVE;
-      subscription.endDate = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000); // 100 years
+      subscription.endDate = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
       subscription.listingsUsedThisMonth = 0;
       subscription.inspectionsUsedThisMonth = 0;
       subscription.boostsUsedThisWeek = 0;
       await subscription.save();
     }
+
+    // Auto-reset weekly boost quota if 7+ days have passed
+    await SubscriptionService.resetWeeklyBoostIfNeeded(subscription);
     
     return subscription;
   }
@@ -408,10 +409,10 @@ export class SubscriptionService {
     const now = new Date();
     const lastReset = new Date(subscription.lastResetDate);
     
-    // Simple weekly check (every 7 days from last reset)
     const daysDiff = Math.floor((now.getTime() - lastReset.getTime()) / (1000 * 60 * 60 * 24));
     if (daysDiff >= 7) {
       subscription.boostsUsedThisWeek = 0;
+      subscription.lastResetDate = now; // ← cập nhật để tránh reset liên tục
       await subscription.save();
     }
   }
