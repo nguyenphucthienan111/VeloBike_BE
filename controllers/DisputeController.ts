@@ -295,33 +295,35 @@ export class DisputeController {
           // Order đã complete — clawback từ seller wallet
           if (refund > 0) {
             const seller = await User.findById(order.sellerId);
+            let actualClawback = 0;
+
             if (seller) {
-              const clawback = Math.min(refund, seller.wallet.balance);
-              seller.wallet.balance -= clawback;
+              actualClawback = Math.min(refund, seller.wallet.balance);
+              seller.wallet.balance -= actualClawback;
               await seller.save();
               await Transaction.create({
                 userId: order.sellerId,
                 type: "REFUND",
-                amount: -clawback,
+                amount: -actualClawback,
                 status: "COMPLETED",
                 relatedOrderId: order._id,
                 description: `Dispute clawback for order #${order._id} — dispute #${dispute._id}`,
-                metadata: { disputeId: dispute._id, clawback: true },
+                metadata: { disputeId: dispute._id, clawback: true, requestedRefund: refund, actualClawback },
               });
             }
 
             const buyer = await User.findById(dispute.claimantId);
-            if (buyer) {
-              buyer.wallet.balance += refund;
+            if (buyer && actualClawback > 0) {
+              buyer.wallet.balance += actualClawback;
               await buyer.save();
               await Transaction.create({
                 userId: dispute.claimantId,
                 type: "REFUND",
-                amount: refund,
+                amount: actualClawback,
                 status: "COMPLETED",
                 relatedOrderId: order._id,
-                description: `Dispute refund for order #${order._id} — dispute #${dispute._id}`,
-                metadata: { disputeId: dispute._id },
+                description: `Dispute refund for order #${order._id} — dispute #${dispute._id}${actualClawback < refund ? ` (partial: seller only had ${actualClawback.toLocaleString("vi-VN")}đ)` : ''}`,
+                metadata: { disputeId: dispute._id, requestedRefund: refund, actualClawback },
               });
             }
 
@@ -330,7 +332,19 @@ export class DisputeController {
               status: OrderStatus.REFUNDED,
               timestamp: new Date(),
               actorId: new mongoose.Types.ObjectId(adminId),
-              note: `Dispute resolved — clawback ${refund.toLocaleString("vi-VN")}đ from seller`,
+              note: actualClawback < refund
+                ? `Dispute resolved — partial clawback ${actualClawback.toLocaleString("vi-VN")}đ from seller (requested ${refund.toLocaleString("vi-VN")}đ, seller had insufficient balance)`
+                : `Dispute resolved — clawback ${actualClawback.toLocaleString("vi-VN")}đ from seller`,
+            } as any);
+            await order.save();
+          } else {
+            // Deny claim — seller keeps payment, restore order to COMPLETED
+            order.status = OrderStatus.COMPLETED;
+            order.timeline.push({
+              status: OrderStatus.COMPLETED,
+              timestamp: new Date(),
+              actorId: new mongoose.Types.ObjectId(adminId),
+              note: `Dispute resolved — claim denied, seller keeps payment`,
             } as any);
             await order.save();
           }
@@ -496,9 +510,9 @@ export class DisputeController {
       }
 
       const disputes = await Dispute.find(query)
-        .populate("claimantId", "fullName email")
-        .populate("respondentId", "fullName email")
-        .populate({ path: "orderId", select: "_id listingId", populate: { path: "listingId", select: "title" } })
+        .populate("claimantId", "fullName email phone")
+        .populate("respondentId", "fullName email phone")
+        .populate({ path: "orderId", select: "_id listingId amount financials shippingAddress", populate: { path: "listingId", select: "title" } })
         .sort({ createdAt: -1 })
         .skip((Number(page) - 1) * Number(limit))
         .limit(Number(limit));

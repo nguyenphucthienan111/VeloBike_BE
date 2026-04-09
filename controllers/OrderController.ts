@@ -197,7 +197,7 @@ export class OrderController {
 
       const orders = await Order.find(query)
         .populate("listingId", "title generalInfo pricing media")
-        .populate("buyerId", "fullName")
+        .populate("buyerId", "fullName email phone")
         .populate("sellerId", "fullName")
         .sort({ createdAt: -1 })
         .skip((Number(page) - 1) * Number(limit))
